@@ -18,8 +18,13 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
     python -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
-    python src/fetch_data.py
-    python src/build_dataset.py
+    python src/fetch_data.py       # download SOFR, EFFR, ON RRP, TGA
+    python src/build_dataset.py    # merge into data/processed/daily.csv
+    python src/model_lasso.py      # walk-forward LASSO vs AR benchmarks
+    python src/backtest_carry.py   # the cash placement rule
+    streamlit run app.py           # the app
+
+The app reads only the files in `data/processed`, so it starts without refitting anything.
 
 ## Data
 

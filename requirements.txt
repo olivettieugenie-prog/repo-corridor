@@ -1,5 +1,6 @@
-pandas
-requests
-scikit-learn
+# Runtime dependencies for the deployed app only.
+# app.py reads the precomputed files in data/processed, so it needs no
+# modelling library. The analysis scripts in src/ need requirements-dev.txt.
 streamlit>=1.50
+pandas
 altair>=5

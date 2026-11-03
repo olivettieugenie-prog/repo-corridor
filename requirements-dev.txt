@@ -1,0 +1,6 @@
+# Everything needed to regenerate the data and refit the model:
+#   python src/fetch_data.py && python src/build_dataset.py
+#   python src/model_lasso.py && python src/backtest_carry.py
+-r requirements.txt
+requests
+scikit-learn
