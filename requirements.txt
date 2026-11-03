@@ -1,0 +1,5 @@
+pandas
+requests
+scikit-learn
+streamlit>=1.50
+altair>=5
