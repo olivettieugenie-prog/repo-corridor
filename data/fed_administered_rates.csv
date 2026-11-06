@@ -1,0 +1,16 @@
+effective_date,target_lo,target_hi,iorb_pct,onrrp_pct,source_url
+2018-03-22,1.50,1.75,1.75,1.50,https://www.federalreserve.gov/newsevents/pressreleases/monetary20180321a1.htm
+2018-06-14,1.75,2.00,1.95,1.75,https://www.federalreserve.gov/newsevents/pressreleases/monetary20180613a1.htm
+2018-09-27,2.00,2.25,2.20,2.00,https://www.federalreserve.gov/newsevents/pressreleases/monetary20180926a1.htm
+2018-12-20,2.25,2.50,2.40,2.25,https://www.federalreserve.gov/newsevents/pressreleases/monetary20181219a1.htm
+2019-05-02,2.25,2.50,2.35,2.25,https://www.federalreserve.gov/newsevents/pressreleases/monetary20190501a1.htm
+2019-08-01,2.00,2.25,2.10,2.00,https://www.federalreserve.gov/newsevents/pressreleases/monetary20190731a1.htm
+2019-09-19,1.75,2.00,1.80,1.70,https://www.federalreserve.gov/newsevents/pressreleases/monetary20190918a1.htm
+2019-10-31,1.50,1.75,1.55,1.45,https://www.federalreserve.gov/newsevents/pressreleases/monetary20191030a1.htm
+2020-03-04,1.00,1.25,1.10,1.00,https://www.federalreserve.gov/newsevents/pressreleases/monetary20200303a1.htm
+2020-03-16,0.00,0.25,0.10,0.00,https://www.federalreserve.gov/newsevents/pressreleases/monetary20200315a1.htm
+2021-06-17,0.00,0.25,0.15,0.05,https://www.federalreserve.gov/newsevents/pressreleases/monetary20210616a1.htm
+2022-03-17,0.25,0.50,0.40,0.30,https://www.federalreserve.gov/newsevents/pressreleases/monetary20220316a1.htm
+2022-06-16,1.50,1.75,1.65,1.55,https://www.federalreserve.gov/newsevents/pressreleases/monetary20220615a1.htm
+2023-07-27,5.25,5.50,5.40,5.30,https://www.federalreserve.gov/newsevents/pressreleases/monetary20230726a1.htm
+2024-12-19,4.25,4.50,4.40,4.25,https://www.federalreserve.gov/newsevents/pressreleases/monetary20241218a1.htm

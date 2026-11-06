@@ -33,21 +33,17 @@ OUT = ROOT / "data" / "processed"
 BASE_WIN, BASE_MIN = 60, 30  # trailing median window, and minimum to emit one
 WINSOR_BP = 25.0  # fixed cap on the modelling target, stated not fitted
 
-# Administered rates against the target range, read off the Federal Reserve's
-# own implementation notes (date = effective date):
-#   2018-12-20  range 2.25-2.50  IOER 2.40 (top-10)  ON RRP 2.25 (bottom)
-#   2019-10-31  range 1.50-1.75  IOER 1.55 (top-20)  ON RRP 1.45 (bottom-5)
-#   2021-06-17  range 0.00-0.25  IORB 0.15 (top-10)  ON RRP 0.05 (bottom+5)
-#   2022-06-16  range 1.50-1.75  IORB 1.65 (top-10)  ON RRP 1.55 (bottom+5)
-#   2023-07-27  range 5.25-5.50  IORB 5.40 (top-10)  ON RRP 5.30 (bottom+5)
-#   2024-12-19  range 4.25-4.50  IORB 4.40 (top-10)  ON RRP 4.25 (bottom)
-# From 2021-06-17 the offsets are stable and verified at three interior dates
-# plus the 30 observed days to 2024-12-18, which show exactly +5.0bp. Before
-# that they are not: October 2019 puts ON RRP *below* the range and IOER 20bp
-# under the top. So nothing before 2021-06-17 is reconstructed here.
-PLUS5_START, PLUS5_END = pd.Timestamp("2021-06-17"), pd.Timestamp("2024-12-18")
-RULE_VERIFIED_FROM = PLUS5_START
-IORB_OFFSET = 0.10  # below the top of the range, verified from 2021-06-17
+# Administered rates come from data/fed_administered_rates.csv, one row per
+# Federal Reserve implementation note, each carrying its source URL. The
+# offsets are NOT stable, which is why the table exists rather than a rule:
+# IORB sits 0, 5, 10, 15 or 20bp below the top of the range depending on the
+# year, and ON RRP sits 5bp below the bottom in late 2019 and 5bp above it
+# from June 2021 to December 2024.
+#
+# Between notes the last note's OFFSETS are carried forward and applied to that
+# day's actual target range, so a range change with no note of its own is
+# handled correctly. Every day records which note it came from.
+RATES_CSV = "fed_administered_rates.csv"
 
 
 def load(name: str) -> pd.DataFrame:
@@ -160,21 +156,46 @@ def main() -> int:
         df["rrp_award_pct"], df["rrp_cpty"] = pd.NA, pd.NA
         print("\nrrp_rate.csv absent: award rate not checked")
 
-    # Award rate: observed where the API reaches, otherwise reconstructed from
-    # the published offset rules above. Never a bare copy of the range bottom.
-    in_plus5 = df["date"].between(PLUS5_START, PLUS5_END)
-    rule = df["target_lo"] + np.where(in_plus5, 0.05, 0.0)
-    rule = pd.Series(rule, index=df.index).where(df["date"] >= RULE_VERIFIED_FROM)
-    df["award_pct"] = df["rrp_award_pct"].fillna(rule)
-    df["award_src"] = np.where(
-        df["rrp_award_pct"].notna(), "observed",
-        np.where(df["date"] >= RULE_VERIFIED_FROM, "rule", "unavailable"))
-    df["carry_bp"] = (df["sofr"] - df["award_pct"]) * 100
-    df["carry_usable"] = df["award_src"].ne("unavailable").astype(int)
+    # Administered rates from the implementation-note table.
+    notes = pd.read_csv(ROOT / "data" / RATES_CSV, parse_dates=["effective_date"])
+    notes = notes.sort_values("effective_date").reset_index(drop=True)
+    notes["iorb_off"] = notes["iorb_pct"] - notes["target_hi"]
+    notes["onrrp_off"] = notes["onrrp_pct"] - notes["target_lo"]
+    notes["note_date"] = notes["effective_date"]
+    df = pd.merge_asof(
+        df, notes[["effective_date", "iorb_off", "onrrp_off", "note_date",
+                   "target_lo", "target_hi", "source_url"]]
+        .rename(columns={"target_lo": "note_lo", "target_hi": "note_hi"}),
+        left_on="date", right_on="effective_date", direction="backward")
+    assert df["iorb_off"].notna().all(), "a date precedes the first note in the table"
 
-    # IORB, the rate a bank earns instead of lending in repo. Reconstructed
-    # only where the offset is verified; left empty before, where it is not.
-    df["iorb_pct"] = (df["target_hi"] - IORB_OFFSET).where(df["date"] >= RULE_VERIFIED_FROM)
+    # Independent cross-check: on a note's own effective date, the range the
+    # note states must match the range the NY Fed EFFR series carries.
+    on_note = df[df["date"] == df["note_date"]]
+    bad = on_note[(on_note["note_lo"] - on_note["target_lo"]).abs().gt(1e-9)
+                  | (on_note["note_hi"] - on_note["target_hi"]).abs().gt(1e-9)]
+    assert bad.empty, f"note range disagrees with NY Fed range:\n{bad[['date']]}"
+    print(f"\n{len(notes)} implementation notes; range agrees with the NY Fed "
+          f"series on all {len(on_note)} note dates present in the sample")
+
+    df["iorb_pct"] = df["target_hi"] + df["iorb_off"]
+    rule = df["target_lo"] + df["onrrp_off"]
+    df["award_pct"] = df["rrp_award_pct"].fillna(rule)
+    df["award_src"] = np.where(df["rrp_award_pct"].notna(), "observed", "note")
+    # A day whose range differs from its note's range relies on the offset
+    # having persisted across a rate change no note in the table covers.
+    df["offset_carried"] = ((df["target_lo"] - df["note_lo"]).abs().gt(1e-9)
+                            | (df["target_hi"] - df["note_hi"]).abs().gt(1e-9)).astype(int)
+
+    # The table must reproduce every directly observed award rate.
+    obs = df[df["rrp_award_pct"].notna()]
+    mism = obs[(obs["rrp_award_pct"] - (obs["target_lo"] + obs["onrrp_off"])).abs() > 1e-9]
+    print(f"table reproduces the observed award rate on "
+          f"{len(obs) - len(mism)}/{len(obs)} observed days")
+    assert mism.empty, f"table disagrees with observed award rate:\n{mism[['date']].head()}"
+
+    df["carry_bp"] = (df["sofr"] - df["award_pct"]) * 100
+    df["carry_usable"] = 1
     df["spread_iorb_bp"] = (df["sofr"] - df["iorb_pct"]) * 100
     df["is_zirp"] = (df["target_hi"] <= 0.25).astype(int)
 
@@ -210,6 +231,8 @@ def main() -> int:
     print(chk.to_string())
     print("\nAward rate source:")
     print(df["award_src"].value_counts().to_string())
+    print(f"days whose offset is carried across an uncovered rate change: "
+          f"{int(df['offset_carried'].sum())}")
     use = df[df["carry_usable"] == 1]
     print(f"carry usable on {len(use)}/{len(df)} days "
           f"({use['date'].min().date()} -> {use['date'].max().date()}); "
@@ -218,6 +241,9 @@ def main() -> int:
     bad = df.loc[(df["award_src"] == "observed")
                  & ((df["award_pct"] - df["rrp_award_pct"]).abs() > 1e-9)]
     assert bad.empty, "observed award rate overwritten"
+    print("\nIORB offset below the top of the range, by period (bp):")
+    print((df.groupby(df["note_date"].dt.date)["iorb_off"].first() * 100)
+          .round(0).astype(int).to_string())
     print(f"\nTarget-range changes: {int(df['rate_change'].sum())}; "
           f"of which within a day of month-end: "
           f"{int(((df['rate_change'] == 1) & (df['month_end'] == 1)).sum() + ((df['rate_change_lag1'] == 1) & (df['month_end'] == 1)).sum())}")

@@ -17,7 +17,7 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
 
     python -m venv .venv
     source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r requirements-dev.txt   # requirements.txt alone runs only the app
     python src/fetch_data.py       # download SOFR, EFFR, ON RRP, TGA
     python src/build_dataset.py    # merge into data/processed/daily.csv
     python src/model_lasso.py      # walk-forward LASSO vs AR benchmarks
@@ -46,7 +46,9 @@ The level drifts by regime, and the drift is the economics, not the signal. Year
 
 A cash investor chooses each day between lending overnight in repo at SOFR and placing at the Fed's ON RRP facility at the award rate. The carry is the difference.
 
-On the 1,337 days where the award rate is known, the carry was negative on 11.3% of them, and the median was +1 bp. It is not uniform across time, and that is the finding. In 2022 the carry was negative on 58.6% of days. In 2023 and 2024 it was +1 to +2 bp at the median. From 2025 it widened to +10 and then +14 bp.
+The carry is now known for all 2,140 days, and its shape across the reserve cycle is the economic spine of the project. Median carry by year: +20 bp in 2018, +15 bp in 2019, +9 bp in 2020, 0 bp in 2021, −1 bp in 2022 with 58.6% of days negative, +1 bp in 2023, +2 bp in 2024, +10 bp in 2025, +14 bp in 2026. High when reserves were scarce, zero or negative when the system was awash, high again as the facility drained.
+
+The extremes are in there too. On 17 September 2019 SOFR printed 5.25% against an ON RRP offering rate of 2.00%, so lending overnight in repo paid 325 bp over the facility. That is what the corridor failing looks like.
 
 That tracks a policy change exactly. From 17 June 2021 the Fed set the ON RRP rate 5 bp above the bottom of the target range, making the facility deliberately attractive, and usage rose to about $2.0tn. Effective 19 December 2024 it was realigned to the bottom of the range, the repo carry turned positive again, and usage fell to about $2bn. The spread against IORB moves the same way, from -11.5 bp in 2022 to -1.4 bp in 2026.
 
@@ -72,17 +74,19 @@ The rule places tomorrow's overnight cash either in repo at SOFR or at the ON RR
 
 The carry decomposes exactly, and the script asserts it: carry = base + deviation + corridor, where base is the spread's trailing median and corridor is the gap between the top of the target range and the award rate. Base and corridor are both known the day before. So most of tomorrow's carry needs no model at all, and a rule given only the known part is the benchmark that matters. Judging against passive always-lend alone would credit the model for the corridor.
 
-Over the full sample, in basis points of annualised yield on overnight cash:
+Over the 1,605 decision days the model covers, in basis points of annualised yield on overnight cash:
 
 | rule | net bp | vs always-lend | vs known-only |
 |---|---|---|---|
-| always lend | 4.829 | — | −0.201 |
-| known only, no model | 5.030 | +0.201 | — |
-| AR(1) | 5.114 | +0.284 | +0.084 |
-| two-stage LASSO | 5.117 | +0.287 | +0.087 |
-| perfect foresight | 5.132 | +0.303 | +0.103 |
+| always lend | 5.034 | — | −0.167 |
+| known only, no model | 5.201 | +0.167 | — |
+| AR(1) | 5.270 | +0.237 | +0.070 |
+| two-stage LASSO | 5.273 | +0.239 | +0.072 |
+| perfect foresight | 5.286 | +0.252 | +0.085 |
 
-The whole opportunity, with tomorrow's carry known in advance, is 0.303 bp. A rule with no model captures two-thirds of it. The LASSO's margin over AR(1) is 0.003 bp, which is nothing. At a 1 bp switching cost the LASSO falls behind AR(1), at +0.155 against +0.186.
+The whole opportunity, with tomorrow's carry known in advance, is 0.252 bp. A rule with no model captures two-thirds of it. The LASSO's margin over AR(1) is 0.003 bp, which is nothing.
+
+This is the result after extending the administered-rate history back to 2018, which added 269 decision days. It did not move the conclusion, which is the point of having run it.
 
 So the model has statistical skill, at R² +0.13 against AR(1) from 2024, and that skill is worth essentially nothing here. The reason is structural: the Fed's two facilities bound the corridor so tightly that the overnight placement decision has almost no money in it. The action is confined to 2022 and 2023. In 2022 always-lend gave up 1.55 bp against the facility and every smarter rule merely gets back to zero, which is why about $2.0tn sat at ON RRP: not to chase carry, but because the facility simply paid more. From 2024 the carry is positive every day and all rules collapse onto always-lend. In 2023 the carry is so thin that switching costs take the entire benefit, and even perfect foresight nets less than always-lend.
 

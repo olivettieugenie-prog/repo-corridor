@@ -72,6 +72,7 @@ usable = carry
 always = usable["carry_bp"].mean()
 perfect = np.maximum(usable["carry_bp"], 0).mean()
 rec = oos[oos["date"].dt.year >= 2024]
+peak = daily["carry_bp"].max()
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("SOFR days covered", f"{len(daily):,}",
@@ -83,9 +84,9 @@ c2.metric("Model skill vs AR(1), 2024+",
 c3.metric("Carry from always lending", f"{always:.2f} bp",
           help="Mean annualised pickup of overnight repo over the ON RRP "
                "facility, on the 1,336 days where the award rate is known")
-c4.metric("Whole prize, perfect foresight", f"{perfect - always:+.3f} bp",
-          help="What knowing tomorrow's carry in advance would have added. "
-               "This is the ceiling on any model's economic value here.")
+c4.metric("Carry on 17 Sep 2019", f"{peak:,.0f} bp",
+          help="The day the plumbing broke: SOFR printed 5.25% while the Fed's "
+               "facility paid 2.00%. Normal range is about -10 to +30 bp.")
 
 st.divider()
 
@@ -118,12 +119,26 @@ lines = (alt.Chart(rates).mark_line(strokeWidth=2)
 # band is a sliver and the position inside it cannot be read off the rates. The
 # second panel plots that position directly, in basis points, sharing the
 # x-axis. Two panels rather than a second y-scale on one.
+# 17 September 2019 reaches 325 bp against a normal range of about -10 to +30,
+# so the axis is clipped to keep the rest readable and the spike is labelled
+# rather than dropped.
 inside = d.dropna(subset=["carry_bp"])
-pos = (alt.Chart(inside).mark_line(strokeWidth=2, color=BLUE)
+CLIP_HI = 70
+pos = (alt.Chart(inside).mark_line(strokeWidth=2, color=BLUE, clip=True)
        .encode(x=alt.X("date:T", title=None),
-               y=alt.Y("carry_bp:Q", title="SOFR over award rate, bp"),
+               y=alt.Y("carry_bp:Q",
+                       title=f"SOFR over award rate, bp (clipped at {CLIP_HI})",
+                       scale=alt.Scale(domain=[-15, CLIP_HI])),
                tooltip=[alt.Tooltip("date:T", title="date"),
                         alt.Tooltip("carry_bp:Q", title="carry, bp", format=".1f")]))
+# Only the single largest day is labelled. Annotating every clipped spike put
+# three labels on top of each other around 2019.
+top = inside.loc[[inside["carry_bp"].idxmax()]].copy()
+top["lab"] = top["carry_bp"].round().astype(int).astype(str) + " bp"
+top["y"] = CLIP_HI - 7
+pos = pos + (alt.Chart(top).mark_text(align="left", dx=6, font=FONT,
+                                      fontSize=11, color=RED)
+             .encode(x="date:T", y=alt.Y("y:Q"), text="lab:N"))
 floor = (alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1)
          .encode(y="y:Q"))
 st.altair_chart(style(alt.vconcat(
@@ -133,11 +148,12 @@ st.altair_chart(style(alt.vconcat(
                              title="Where SOFR sits above the facility floor"),
 ).resolve_scale(x="shared")), width="stretch")
 st.caption(
-    "The award rate sat 5 bp above the bottom of the range from 17 June 2021 "
-    "and was realigned to the bottom effective 19 December 2024. Before June "
-    "2021 the offsets are not stable, so the award rate is left blank there "
-    "rather than guessed: the 31 October 2019 implementation note puts ON RRP "
-    "*below* the range."
+    "The administered rates come from a table of 15 Federal Reserve "
+    "implementation notes, each cited in the repository, because the offsets "
+    "are not stable. ON RRP sat at the bottom of the range until September "
+    "2019, 5 bp below it through to March 2020, 5 bp above it from June 2021, "
+    "and back at the bottom from 19 December 2024. The table reproduces all "
+    "491 directly observed award rates."
 )
 
 st.divider()
