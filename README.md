@@ -98,21 +98,23 @@ The model forecasts the *size* of the deviation, and that is thrown away by a bi
 
 Robust loss, Huber for instance, is the cleaner fix for the 2019 outlier than a fixed winsorising cap, but it sits outside what the course covers.
 
-Covering 2018 to mid-2021 needs an offset table built from each Fed implementation note, since the administered-rate offsets are not stable before June 2021.
+September 2019 is in the data but not in the backtest. The model needs 500 training days, so its first forecast is 20 May 2020 and the stress episodes of September 2019 and March 2020 fall inside the training window. They are documented as case studies rather than scored as forecasts. Shortening the training window would bring them in, at the cost of fitting the early model on a few hundred days.
 
 ## Status
 
 Data downloaded and verified. Dataset builder, walk-forward LASSO and carry backtest all written and run, with assertions for no look-ahead, award-rate consistency and the carry identity. Next: the Streamlit app and the report.
 
-## Known data limits
+## The administered-rate table
 
-The ON RRP award rate endpoint accepts only a count of recent operations, capped between 400 and 500, with no date-range form. 491 days are observed directly (from 5 November 2024).
+`data/fed_administered_rates.csv` holds one row per Federal Reserve implementation note, 15 of them, each with the effective date, the target range, the IORB (or IOER) rate, the ON RRP offering rate, and the URL of the note it was read from. It exists because the offsets are not stable and cannot be assumed.
 
-Earlier days are reconstructed from the Fed's published implementation notes, and only where those notes verify the offsets. From 17 June 2021 ON RRP sat at the bottom of the range plus 5 bp and IORB at the top minus 10 bp, checked at 17 June 2021, 16 June 2022, 27 July 2023 and 19 December 2024, and corroborated by the 30 observed days before the realignment, which show exactly +5.0 bp.
+IORB sits 0 bp below the top of the target range in early 2018, then 5, then 10, then 15, then 20 bp through late 2019 and early 2020, then back to 10 bp from June 2021. A flat 10 bp assumption, which an earlier version of this project used, is wrong on 713 of the 2,140 days, by up to 10 bp. ON RRP sits at the bottom of the range until September 2019, 5 bp below it to March 2020, at the bottom again, 5 bp above it from 17 June 2021, and back at the bottom from 19 December 2024.
 
-Before 17 June 2021 the offsets are not stable and are not reconstructed. The 31 October 2019 note puts ON RRP at 1.45 against a 1.50-1.75 range, 5 bp *below* the bottom, and IOER at 1.55, 20 bp below the top. So 803 days carry `award_src = "unavailable"` and `carry_usable = 0`, and `iorb_pct` is empty there. Covering 2018 to mid-2021 needs an offset table built from each implementation note.
+Between notes the last note's offsets are carried forward and applied to that day's actual target range, so a rate change with no note of its own is handled. Two checks run on every build and both must pass: on each note's own effective date the range the note states must equal the range the NY Fed series carries, and the table must reproduce all 491 directly observed award rates. It does.
 
-Note that `spread_hi_bp` is SOFR minus the top of the target range, a published number, not a proxy for IORB. The IORB spread is `spread_iorb_bp` and exists only on verified days.
+309 days, from 5 May 2022 to 4 November 2024, rely on an offset carried across a rate change no note in the table covers. That stretch is bounded by verified notes on both sides, at 17 March 2022 and 16 June 2022 before it and 27 July 2023 within it, plus the observed award rates from 5 November 2024.
+
+Note that `spread_hi_bp` is SOFR minus the top of the target range, a published number, not a proxy for IORB. The IORB spread is `spread_iorb_bp`.
 
 FRED times out from the author's network and is optional.
 
