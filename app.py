@@ -240,6 +240,47 @@ st.caption(
     "has to pass through the regime break before it adapts."
 )
 
+st.subheader("3b. What is the model actually using?")
+imp = pd.read_csv(PROC / "permutation_importance.csv")
+imp["kind"] = np.where(imp["n_cols"] > 1, "shuffled as a group", "one at a time")
+order = imp.sort_values("mean_bp", ascending=False)["what"].tolist()
+# 19 categories: Altair drops labels to avoid overlap unless told not to, and
+# the chart needs the height to show them all or the dots cannot be read.
+enc_y = alt.Y("what:N", sort=order, title=None,
+              axis=alt.Axis(labelOverlap=False, labelLimit=220))
+dots = (alt.Chart(imp).mark_point(filled=True, size=90)
+        .encode(x=alt.X("mean_bp:Q", title="increase in out-of-sample RMSE, bp"),
+                y=enc_y,
+                color=alt.Color("kind:N", title=None,
+                                scale=alt.Scale(domain=["one at a time",
+                                                        "shuffled as a group"],
+                                                range=[BLUE, ORANGE])),
+                tooltip=[alt.Tooltip("what:N", title=None),
+                         alt.Tooltip("mean_bp:Q", title="RMSE increase, bp", format="+.4f"),
+                         alt.Tooltip("p10:Q", format="+.4f"),
+                         alt.Tooltip("p90:Q", format="+.4f")]))
+bars = (alt.Chart(imp).mark_rule(strokeWidth=2, opacity=0.65)
+        .encode(x="p10:Q", x2="p90:Q", y=enc_y,
+                color=alt.Color("kind:N", legend=None,
+                                scale=alt.Scale(domain=["one at a time",
+                                                        "shuffled as a group"],
+                                                range=[BLUE, ORANGE]))))
+zline = (alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=MUTED, strokeWidth=1)
+         .encode(x="x:Q"))
+st.altair_chart(style((bars + dots + zline).properties(
+    height=28 * len(imp) + 40,
+    title="Scramble a predictor and see how much worse the forecast gets")),
+    width="stretch")
+st.caption(
+    "Shuffled in blocks of 21 days so the serial structure survives, 30 times "
+    "each; whiskers span the 10th to 90th percentile of those repeats. "
+    "Correlated predictors are also shuffled together, because the calendar "
+    "flags are nested: every quarter-end is a month-end and every year-end is "
+    "a quarter-end, so one at a time they cover for each other. The four "
+    "balance-sheet variables contribute nothing even jointly, at −0.005 bp. "
+    "Negative means the shuffle happened to help, which is noise."
+)
+
 st.divider()
 
 # ------------------------------------------------------------ is it worth it

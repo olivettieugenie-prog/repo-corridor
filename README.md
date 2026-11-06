@@ -21,6 +21,7 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
     python src/fetch_data.py       # download SOFR, EFFR, ON RRP, TGA
     python src/build_dataset.py    # merge into data/processed/daily.csv
     python src/model_lasso.py      # walk-forward LASSO vs AR benchmarks
+    python src/model_compare.py    # five stage-two models, including trees
     python src/backtest_carry.py   # the cash placement rule
     streamlit run app.py           # the app
 
@@ -67,6 +68,28 @@ A single penalty across all coefficients loses to AR(1), at R² −0.07 against 
 An expanding training window also loses, at −0.11 against AR(1), because the calendar effects are regime-dependent. The month-end premium is +9.6 bp in 2018 and +13.3 bp in 2019, essentially zero from 2020 to 2022 (+0.05, +0.07, +0.01), then +2.0, +3.5, +8.7 and +3.6 bp from 2023 to 2026. A model that weights every regime equally fits none of them. With a rolling 500-day window the two-stage model beats AR(1) by +0.04 overall and +0.13 from 2024 onwards, and by year it is +0.07 in 2024, +0.17 in 2025 and +0.08 in 2026.
 
 The economics behind that is the point of the project. Calendar pressure only bites when reserves are scarce. In 2020 to 2022, with ON RRP usage around $2.0tn, month-end balance-sheet constraints had nothing to push against and the premium disappeared. As reserves drained it returned. The model selects month-end, mid-month settlement, quarter-end and month-start on the residual; the balance-sheet levels are selected rarely and with small coefficients.
+
+## Testing the interaction claim: four rival specifications
+
+The finding above is that calendar pressure only moves the spread when reserves are scarce. That is an interaction, and a linear model on calendar dummies cannot represent it: it learns one average month-end coefficient and applies it in every regime. So the claim is testable. Give a model the interaction explicitly, or give it a model class that finds interactions on its own, and it should do better.
+
+`src/model_compare.py` runs five stage-two specifications through the identical two-stage structure, rolling 500-day window and AR(1) benchmark, so only the model differs. The interaction block is the calendar dummies multiplied by two past-only scarcity measures: the spread's own trailing median, and log ON RRP usage. Tree hyperparameters are fixed and conservative rather than tuned, because 500 rows of a noisy target is where tuning invents performance; the linear models get a cross-validated penalty, which if anything favours them.
+
+| stage-two model | R² vs AR(1), all | 2024+ | RMSE |
+|---|---|---|---|
+| linear, main effects | **+0.044** | **+0.129** | **1.961** |
+| linear + interactions | +0.006 | +0.085 | 1.999 |
+| ridge + interactions | −0.319 | −0.020 | 2.303 |
+| random forest | −0.093 | −0.070 | 2.096 |
+| gradient boosting | −0.415 | −0.134 | 2.385 |
+
+The hypothesis fails. Nothing beats plain main effects, and the more capacity a specification has, the worse it does.
+
+The reading is that the rolling window is already doing the work. It only ever sees one regime at a time and relearns the local month-end coefficient at every refit, so an explicit interaction adds parameters without adding information. On a target this noisy that costs more than it returns. The regime-dependence is real, and it is handled by letting the model forget rather than by modelling it.
+
+One result runs the other way and is worth keeping. In 2020, the regime break itself, the random forest scores −0.087 against the linear model's −1.832, a factor of twenty. A tree does not extrapolate outside the range it was trained on, so it degrades gently when the world moves; a linear model fitted to the old regime extrapolates confidently and is badly wrong. That is an argument for trees in a break and against them the rest of the time.
+
+As a check, this script reproduces `model_lasso.py`'s headline numbers by an independent code path.
 
 ## Does the skill make money? No, and that is the finding
 
