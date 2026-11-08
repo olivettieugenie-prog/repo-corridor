@@ -13,6 +13,14 @@ follow via st.context.theme. There is no custom theme toggle because
 Streamlit has no API to set its own theme at runtime, and faking it with
 injected CSS leaves the page header in the wrong colours.
 
+Every user-facing string lives in src/i18n.py, keyed by language. The
+English/French switch at the top right stores its choice in
+st.session_state["lang"]; numbers go through i18n.num so French gets a decimal
+comma and narrow no-break spaces. Altair's own axis tick labels (dates and
+numbers) stay in Vega's default English format: st.altair_chart exposes no
+locale setting, and the only alternative is rewriting every label by
+expression. Axis titles, tooltips and in-chart labels are translated.
+
 Run locally:  streamlit run app.py
 """
 from __future__ import annotations
@@ -27,6 +35,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from design import DESIGNS, active_name  # noqa: E402
+from i18n import LANG_NAMES, LANGS, STRINGS, date_short, num  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 PROC = ROOT / "data" / "processed"
@@ -50,7 +59,26 @@ INK, MUTED, GRID, BAND = C["ink"], C["muted"], C["grid"], C["band"]
 FONT = DESIGN["body_font"]
 HEAD = DESIGN["head_font"]
 
-st.set_page_config(page_title="Repo in the Fed's corridor", layout="wide")
+if st.session_state.get("lang") not in LANGS:
+    st.session_state["lang"] = "en"
+LANG = st.session_state["lang"]
+T = STRINGS[LANG]
+BP = T["bp"]
+
+
+def n(x: float, dec: int = 0, sign: bool = False) -> str:
+    return num(x, dec, LANG, sign)
+
+
+def fmt_col(s: pd.Series, dec: int, sign: bool = False) -> pd.Series:
+    return s.map(lambda x: n(x, dec, sign))
+
+
+def date_col(s: pd.Series) -> pd.Series:
+    return s.map(lambda t: date_short(t, LANG))
+
+
+st.set_page_config(page_title=T["page_title"], layout="wide")
 
 st.html(
     """<style>
@@ -90,14 +118,12 @@ def r2(y, p, base) -> float:
 
 daily, oos, carry = load()
 
-st.title("Where repo prints inside the Fed's corridor")
-st.markdown(
-    "Overnight repo trades between two administered rates: the ON RRP facility "
-    "below and interest on reserves above. This page asks what moves SOFR "
-    "inside that corridor, whether a penalised regression predicts it better "
-    "than an autoregression, and whether that prediction is worth any money. "
-    "Public data only, from the New York Fed and the US Treasury."
-)
+head, switch = st.columns([6, 1], vertical_alignment="center")
+with switch, st.container(horizontal=True, horizontal_alignment="right"):
+    st.segmented_control(T["lang_label"], LANGS, format_func=LANG_NAMES.get,
+                         key="lang", required=True, label_visibility="collapsed")
+head.title(T["title"])
+st.markdown(T["intro"])
 
 # ---------------------------------------------------------------- stat tiles
 usable = carry
@@ -107,46 +133,44 @@ rec = oos[oos["date"].dt.year >= 2024]
 peak = daily["carry_bp"].max()
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("SOFR days covered", f"{len(daily):,}",
-          help="2 April 2018 to 26 October 2026, from the NY Fed API")
-c2.metric("Model skill vs AR(1), 2024+",
-          f"{r2(rec['y'], rec['two_stage'], rec['ar1']):+.3f}",
-          help="Out-of-sample R squared of the two-stage LASSO against an "
-               "autoregression, rolling 500-day training window")
-c3.metric("Carry from always lending", f"{always:.2f} bp",
-          help="Mean annualised pickup of overnight repo over the ON RRP "
-               "facility, on the 1,336 days where the award rate is known")
-c4.metric("Carry on 17 Sep 2019", f"{peak:,.0f} bp",
-          help="The day the plumbing broke: SOFR printed 5.25% while the Fed's "
-               "facility paid 2.00%. Normal range is about -10 to +30 bp.")
+c1.metric(T["tile_days"], n(len(daily)), help=T["tile_days_help"])
+c2.metric(T["tile_skill"], n(r2(rec["y"], rec["two_stage"], rec["ar1"]), 3, sign=True),
+          help=T["tile_skill_help"])
+c3.metric(T["tile_carry"], f"{n(always, 2)}\u00a0{BP}", help=T["tile_carry_help"])
+c4.metric(T["tile_peak"], f"{n(peak)}\u00a0{BP}", help=T["tile_peak_help"])
 
 st.divider()
 
 # ------------------------------------------------------------- the corridor
-st.subheader("1. The corridor")
+st.subheader(T["s1"])
 lo, hi = daily["date"].min().to_pydatetime(), daily["date"].max().to_pydatetime()
-start, end = st.slider("Date range", min_value=lo, max_value=hi, value=(lo, hi),
-                       format="MMM YYYY")
+# A fixed key keeps the chosen range when the language, and so the label,
+# changes.
+start, end = st.slider(T["date_range"], min_value=lo, max_value=hi, value=(lo, hi),
+                       format=T["slider_format"], key="range")
 d = daily[(daily["date"] >= start) & (daily["date"] <= end)]
 
 band = (alt.Chart(d).mark_area(opacity=0.55, color=BAND)
         .encode(x=alt.X("date:T", title=None),
-                y=alt.Y("target_lo:Q", title="percent",
+                y=alt.Y("target_lo:Q", title=T["ax_percent"],
                         scale=alt.Scale(zero=False)),
                 y2="target_hi:Q"))
 rates = d.melt(id_vars="date", value_vars=["sofr", "award_pct"],
                var_name="series", value_name="pct").dropna()
-rates["series"] = rates["series"].map({"sofr": "SOFR",
-                                       "award_pct": "ON RRP award rate"})
+SERIES = [T["series_sofr"], T["series_award"]]
+rates["series"] = rates["series"].map(dict(zip(["sofr", "award_pct"], SERIES)))
+# Tooltip values are formatted here rather than by Vega, so they follow the
+# language.
+rates["date_s"] = date_col(rates["date"])
+rates["pct_s"] = fmt_col(rates["pct"], 2)
 lines = (alt.Chart(rates).mark_line(strokeWidth=2)
          .encode(x=alt.X("date:T", title=None),
-                 y=alt.Y("pct:Q", title="percent", scale=alt.Scale(zero=False)),
+                 y=alt.Y("pct:Q", title=T["ax_percent"], scale=alt.Scale(zero=False)),
                  color=alt.Color("series:N", title=None,
-                                 scale=alt.Scale(domain=["SOFR", "ON RRP award rate"],
-                                                 range=[BLUE, ORANGE])),
-                 tooltip=[alt.Tooltip("date:T", title="date"),
-                          alt.Tooltip("series:N", title=None),
-                          alt.Tooltip("pct:Q", title="percent", format=".2f")]))
+                                 scale=alt.Scale(domain=SERIES, range=[BLUE, ORANGE])),
+                 tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
+                          alt.Tooltip("series:N", title=T["tt_series"]),
+                          alt.Tooltip("pct_s:N", title=T["tt_percent"])]))
 # The corridor is 25bp wide on an axis spanning five percentage points, so the
 # band is a sliver and the position inside it cannot be read off the rates. The
 # second panel plots that position directly, in basis points, sharing the
@@ -154,19 +178,21 @@ lines = (alt.Chart(rates).mark_line(strokeWidth=2)
 # 17 September 2019 reaches 325 bp against a normal range of about -10 to +30,
 # so the axis is clipped to keep the rest readable and the spike is labelled
 # rather than dropped.
-inside = d.dropna(subset=["carry_bp"])
+inside = d.dropna(subset=["carry_bp"]).copy()
+inside["date_s"] = date_col(inside["date"])
+inside["carry_s"] = fmt_col(inside["carry_bp"], 1)
 CLIP_HI = 70
 pos = (alt.Chart(inside).mark_line(strokeWidth=2, color=BLUE, clip=True)
        .encode(x=alt.X("date:T", title=None),
                y=alt.Y("carry_bp:Q",
-                       title=f"SOFR over award rate, bp (clipped at {CLIP_HI})",
+                       title=T["ax_position"].format(clip=CLIP_HI),
                        scale=alt.Scale(domain=[-15, CLIP_HI])),
-               tooltip=[alt.Tooltip("date:T", title="date"),
-                        alt.Tooltip("carry_bp:Q", title="carry, bp", format=".1f")]))
+               tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
+                        alt.Tooltip("carry_s:N", title=T["tt_carry"])]))
 # Only the single largest day is labelled. Annotating every clipped spike put
 # three labels on top of each other around 2019.
 top = inside.loc[[inside["carry_bp"].idxmax()]].copy()
-top["lab"] = top["carry_bp"].round().astype(int).astype(str) + " bp"
+top["lab"] = fmt_col(top["carry_bp"], 0) + "\u00a0" + BP
 top["y"] = CLIP_HI - 7
 pos = pos + (alt.Chart(top).mark_text(align="left", dx=6, font=FONT,
                                       fontSize=11, color=RED)
@@ -175,23 +201,16 @@ floor = (alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=
          .encode(y="y:Q"))
 st.altair_chart(style(alt.vconcat(
     (band + lines).properties(height=260,
-                              title="Shaded band is the FOMC target range"),
+                              title=T["ch_band"]),
     (pos + floor).properties(height=150,
-                             title="Where SOFR sits above the facility floor"),
+                             title=T["ch_position"]),
 ).resolve_scale(x="shared")), width="stretch")
-st.caption(
-    "The administered rates come from a table of 15 Federal Reserve "
-    "implementation notes, each cited in the repository, because the offsets "
-    "are not stable. ON RRP sat at the bottom of the range until September "
-    "2019, 5 bp below it through to March 2020, 5 bp above it from June 2021, "
-    "and back at the bottom from 19 December 2024. The table reproduces all "
-    "491 directly observed award rates."
-)
+st.caption(T["cap1"])
 
 st.divider()
 
 # ------------------------------------------- the regime-dependent month-end
-st.subheader("2. Calendar pressure only bites when reserves are scarce")
+st.subheader(T["s2"])
 dd = daily.dropna(subset=["dev_bp"]).copy()
 dd["dev_c"] = dd["dev_bp"].clip(-25, 25)
 prem = (dd.groupby("year")
@@ -199,157 +218,124 @@ prem = (dd.groupby("year")
                - g.loc[g.month_end == 0, "dev_c"].mean(), include_groups=False)
         .rename("premium_bp").reset_index())
 rrp = dd.groupby("year")["rrp_bn_t"].mean().rename("rrp_bn").reset_index()
+prem["premium_s"] = fmt_col(prem["premium_bp"], 2)
+prem["label_s"] = fmt_col(prem["premium_bp"], 1)
+rrp["rrp_s"] = fmt_col(rrp["rrp_bn"], 0)
 
 left, right = st.columns(2)
 bars = (alt.Chart(prem).mark_bar(color=BLUE, cornerRadiusTopLeft=4,
                                  cornerRadiusTopRight=4, size=26)
         .encode(x=alt.X("year:O", title=None),
-                y=alt.Y("premium_bp:Q", title="basis points"),
-                tooltip=[alt.Tooltip("year:O", title="year"),
-                         alt.Tooltip("premium_bp:Q", title="premium, bp", format=".2f")]))
+                y=alt.Y("premium_bp:Q", title=T["ax_bp"]),
+                tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
+                         alt.Tooltip("premium_s:N", title=T["tt_premium"])]))
 labels = (alt.Chart(prem).mark_text(dy=-8, font=FONT, fontSize=11, color=INK)
           .encode(x="year:O", y="premium_bp:Q",
-                  text=alt.Text("premium_bp:Q", format=".1f")))
+                  text="label_s:N"))
 left.altair_chart(style((bars + labels).properties(
-    height=300, title="Month-end premium on the spread")), width="stretch")
+    height=300, title=T["ch_premium"])), width="stretch")
 
 ubars = (alt.Chart(rrp).mark_bar(color=ORANGE, cornerRadiusTopLeft=4,
                                  cornerRadiusTopRight=4, size=26)
          .encode(x=alt.X("year:O", title=None),
-                 y=alt.Y("rrp_bn:Q", title="USD bn, daily average"),
-                 tooltip=[alt.Tooltip("year:O", title="year"),
-                          alt.Tooltip("rrp_bn:Q", title="ON RRP, $bn", format=",.0f")]))
+                 y=alt.Y("rrp_bn:Q", title=T["ax_rrp"]),
+                 tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
+                          alt.Tooltip("rrp_s:N", title=T["tt_rrp"])]))
 right.altair_chart(style(ubars.properties(
-    height=300, title="ON RRP usage")), width="stretch")
-st.caption(
-    "Two charts rather than two axes on one. The month-end premium is about "
-    "9 to 13 bp in 2018 and 2019, essentially zero from 2020 to 2022 when ON "
-    "RRP usage ran near $2.0tn, and returns as the facility drains. With the "
-    "system awash with cash, month-end balance-sheet constraints had nothing "
-    "to push against."
-)
+    height=300, title=T["ch_rrp"])), width="stretch")
+st.caption(T["cap2"])
 
 st.divider()
 
 # -------------------------------------------------------- does the model add
-st.subheader("3. Does the model add anything to an autoregression?")
+st.subheader(T["s3"])
 o = oos.copy()
 o["year"] = o["date"].dt.year
 sk = (o.groupby("year")
       .apply(lambda g: r2(g["y"], g["two_stage"], g["ar1"]), include_groups=False)
       .rename("r2").reset_index())
-sk["sign"] = np.where(sk["r2"] >= 0, "adds", "hurts")
+sk["sign"] = np.where(sk["r2"] >= 0, "adds", "hurts")   # internal, not shown
+sk["r2_s"] = fmt_col(sk["r2"], 3, sign=True)
+sk["label_s"] = fmt_col(sk["r2"], 2, sign=True)
 
 dv = (alt.Chart(sk).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4,
                              cornerRadiusBottomLeft=4, cornerRadiusBottomRight=4,
                              size=26)
       .encode(x=alt.X("year:O", title=None),
-              y=alt.Y("r2:Q", title="out-of-sample R² vs AR(1)"),
+              y=alt.Y("r2:Q", title=T["ax_r2"]),
               color=alt.Color("sign:N", title=None,
                               scale=alt.Scale(domain=["adds", "hurts"],
                                               range=[BLUE, RED]),
                               legend=None),
-              tooltip=[alt.Tooltip("year:O", title="year"),
-                       alt.Tooltip("r2:Q", title="R² vs AR(1)", format="+.3f")]))
+              tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
+                       alt.Tooltip("r2_s:N", title=T["tt_r2"])]))
 zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1).encode(y="y:Q")
 # dy is a mark property, not an encoding channel, so the label sits above a
 # positive bar and below a negative one via two layers rather than a condition.
 def dlabel(frame: pd.DataFrame, dy: int) -> alt.Chart:
     return (alt.Chart(frame).mark_text(dy=dy, font=FONT, fontSize=11, color=INK)
-            .encode(x="year:O", y="r2:Q", text=alt.Text("r2:Q", format="+.2f")))
+            .encode(x="year:O", y="r2:Q", text="label_s:N"))
 
 
 dlab = dlabel(sk[sk["r2"] >= 0], -8) + dlabel(sk[sk["r2"] < 0], 14)
 st.altair_chart(style((dv + zero + dlab).properties(
-    height=320, title="Positive means the LASSO beat the autoregression")),
+    height=320, title=T["ch_r2"])),
     width="stretch")
-st.caption(
-    "Zero is a weak benchmark for this target and is not used. The trailing "
-    "median removes the level of the spread but not a slow trend in it, so the "
-    "deviation stays autocorrelated at 0.81 and an autoregression alone reaches "
-    "R² 0.64 against zero. The bar direction carries the sign, so colour is not "
-    "the only cue. The model loses in 2020 and 2021 because the rolling window "
-    "has to pass through the regime break before it adapts."
-)
+st.caption(T["cap3"])
 
-st.subheader("3b. What is the model actually using?")
+st.subheader(T["s3b"])
 imp = pd.read_csv(PROC / "permutation_importance.csv")
-imp["kind"] = np.where(imp["n_cols"] > 1, "shuffled as a group", "one at a time")
+KINDS = [T["kind_one"], T["kind_group"]]
+imp["kind"] = np.where(imp["n_cols"] > 1, KINDS[1], KINDS[0])
+# Group rows get a translated name; single predictors keep their variable name.
+imp["what"] = imp["what"].map(lambda w: T["groups"].get(w, w))
+for col, dec in (("mean_bp", 4), ("p10", 4), ("p90", 4)):
+    imp[col + "_s"] = fmt_col(imp[col], dec, sign=True)
 order = imp.sort_values("mean_bp", ascending=False)["what"].tolist()
 # 19 categories: Altair drops labels to avoid overlap unless told not to, and
 # the chart needs the height to show them all or the dots cannot be read.
 enc_y = alt.Y("what:N", sort=order, title=None,
               axis=alt.Axis(labelOverlap=False, labelLimit=220))
 dots = (alt.Chart(imp).mark_point(filled=True, size=90)
-        .encode(x=alt.X("mean_bp:Q", title="increase in out-of-sample RMSE, bp"),
+        .encode(x=alt.X("mean_bp:Q", title=T["ax_rmse"]),
                 y=enc_y,
                 color=alt.Color("kind:N", title=None,
-                                scale=alt.Scale(domain=["one at a time",
-                                                        "shuffled as a group"],
-                                                range=[BLUE, ORANGE])),
-                tooltip=[alt.Tooltip("what:N", title=None),
-                         alt.Tooltip("mean_bp:Q", title="RMSE increase, bp", format="+.4f"),
-                         alt.Tooltip("p10:Q", format="+.4f"),
-                         alt.Tooltip("p90:Q", format="+.4f")]))
+                                scale=alt.Scale(domain=KINDS, range=[BLUE, ORANGE])),
+                tooltip=[alt.Tooltip("what:N", title=T["tt_predictor"]),
+                         alt.Tooltip("mean_bp_s:N", title=T["tt_rmse"]),
+                         alt.Tooltip("p10_s:N", title=T["tt_p10"]),
+                         alt.Tooltip("p90_s:N", title=T["tt_p90"])]))
 bars = (alt.Chart(imp).mark_rule(strokeWidth=2, opacity=0.65)
         .encode(x="p10:Q", x2="p90:Q", y=enc_y,
                 color=alt.Color("kind:N", legend=None,
-                                scale=alt.Scale(domain=["one at a time",
-                                                        "shuffled as a group"],
-                                                range=[BLUE, ORANGE]))))
+                                scale=alt.Scale(domain=KINDS, range=[BLUE, ORANGE]))))
 zline = (alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=MUTED, strokeWidth=1)
          .encode(x="x:Q"))
 st.altair_chart(style((bars + dots + zline).properties(
     height=28 * len(imp) + 40,
-    title="Scramble a predictor and see how much worse the forecast gets")),
+    title=T["ch_importance"])),
     width="stretch")
-st.caption(
-    "Shuffled in blocks of 21 days so the serial structure survives, 30 times "
-    "each; whiskers span the 10th to 90th percentile of those repeats. "
-    "Correlated predictors are also shuffled together, because the calendar "
-    "flags are nested: every quarter-end is a month-end and every year-end is "
-    "a quarter-end, so one at a time they cover for each other. The four "
-    "balance-sheet variables contribute nothing even jointly, at −0.005 bp. "
-    "Negative means the shuffle happened to help, which is noise."
-)
+st.caption(T["cap3b"])
 
 st.divider()
 
 # ------------------------------------------------------------ is it worth it
-st.subheader("4. Is the skill worth any money? No")
-st.markdown(
-    "Place tomorrow's overnight cash in repo at SOFR or at the facility at the "
-    "award rate, decided the day before. The carry splits exactly into "
-    "`base + deviation + corridor`, and base and corridor are both known a day "
-    "ahead. So the benchmark that matters is a rule given only the known part, "
-    "not passive always-lend, which would credit the model for the corridor."
-)
+st.subheader(T["s4"])
+st.markdown(T["s4_intro"])
+# None marks the rule's own column, shown as a dash.
+NET = [4.829, 5.030, 5.114, 5.117, 5.132]
+VS_ALWAYS = [None, 0.201, 0.284, 0.287, 0.303]
+VS_KNOWN = [-0.201, None, 0.084, 0.087, 0.103]
+dash = lambda v: "—" if v is None else n(v, 3, sign=True)  # noqa: E731
 rules = pd.DataFrame({
-    "rule": ["always lend", "known only, no model", "AR(1)", "two-stage LASSO",
-             "perfect foresight"],
-    "net bp": [4.829, 5.030, 5.114, 5.117, 5.132],
-    "vs always-lend": ["—", "+0.201", "+0.284", "+0.287", "+0.303"],
-    "vs known-only": ["-0.201", "—", "+0.084", "+0.087", "+0.103"],
+    T["col_rule"]: [T[k] for k in ("rule_always", "rule_known", "rule_ar1",
+                                   "rule_lasso", "rule_perfect")],
+    T["col_net"]: [n(v, 3) for v in NET],
+    T["col_vs_always"]: [dash(v) for v in VS_ALWAYS],
+    T["col_vs_known"]: [dash(v) for v in VS_KNOWN],
 })
 st.dataframe(rules, hide_index=True, width="stretch")
-st.markdown(
-    "The entire opportunity is **0.303 bp** of annualised yield. A rule with no "
-    "model captures two thirds of it, and the LASSO's margin over an "
-    "autoregression is 0.003 bp, which is nothing. At a 1 bp switching cost the "
-    "LASSO falls behind AR(1), +0.155 against +0.186. The Fed's two facilities "
-    "bound the corridor so tightly that the overnight placement decision has "
-    "almost no money in it. In 2022 always-lend gave up 1.55 bp against the "
-    "facility and every smarter rule merely returns to zero, which is why about "
-    "$2.0tn sat at ON RRP: not chasing carry, but because the facility simply "
-    "paid more."
-)
+st.markdown(T["conclusion"])
 
 st.divider()
-st.caption(
-    "Sources: SOFR, EFFR with the FOMC target range, and ON RRP operations from "
-    "the Federal Reserve Bank of New York markets API. Treasury General Account "
-    "from the US Treasury Fiscal Data API. Administered-rate offsets read from "
-    "Federal Reserve implementation notes. Built with pandas and scikit-learn; "
-    "no paid data. Limitations and the extensions left out are in the repository "
-    "README."
-)
+st.caption(T["sources"])
