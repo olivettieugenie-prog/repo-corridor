@@ -27,6 +27,18 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
 
 The app reads only the files in `data/processed`, so it starts without refitting anything.
 
+## Design and language
+
+The active design is **tempered**: near-black dark mode, deep blue light mode, and Roboto for headings and body text. `src/design.py` holds it alongside three other validated designs (marine, institutional, editorial). To change design, edit `ACTIVE` there (or set `REPO_DESIGN`), then regenerate the Streamlit theme:
+
+    python src/design.py tempered   # writes .streamlit/config.toml
+
+The config declares both light and dark palettes and loads the fonts through `theme.font` and `theme.headingFont`, so the viewer switches night mode through Streamlit's own Settings menu and the charts follow.
+
+The page switches between English and French from the control at the top right; English is the default and the choice is kept in `st.session_state["lang"]`. Every user-facing string lives in `src/i18n.py` as `STRINGS["en"]` and `STRINGS["fr"]`, with the same keys in both. To add or reword text, edit both entries there and refer to the key from `app.py` as `T["key"]`. Numbers go through `num()`, which gives `12,345.68` in English and `12 345,68` in French (narrow no-break space, decimal comma). Altair's axis tick labels stay in Vega's default English format, because `st.altair_chart` has no locale setting; axis titles, tooltips and labels inside the charts are translated.
+
+    python -m unittest discover -s tests -v   # same keys in both languages; app runs in EN/FR, light/dark
+
 ## Data
 
 SOFR, EFFR with the Fed target range, and ON RRP come from the NY Fed API. The Treasury General Account (TGA) closing balance comes from the Treasury Fiscal Data API (Daily Treasury Statement), which changed its row labels twice, in October 2021 and April 2022. FRED timed out from the author's network and is optional.
