@@ -150,10 +150,22 @@ start, end = st.slider(T["date_range"], min_value=lo, max_value=hi, value=(lo, h
                        format=T["slider_format"], key="range")
 d = daily[(daily["date"] >= start) & (daily["date"] <= end)]
 
+# The two corridor panels are drawn as separate charts, because a vconcat
+# ignores width="stretch" and overflowed its column. To keep their dates
+# aligned they share one explicit x domain, the same y-axis gutter, and the
+# legend sits above the top panel rather than taking width at its side.
+# Drawn alone, each height includes its title, legend and axes, hence taller
+# values than the old 260 and 150 plot heights.
+X_DATE = alt.X("date:T", title=None,
+               scale=alt.Scale(domain=[pd.Timestamp(start).isoformat(),
+                                       pd.Timestamp(end).isoformat()]))
+Y_GUTTER = 56
+
 band = (alt.Chart(d).mark_area(opacity=0.55, color=BAND)
-        .encode(x=alt.X("date:T", title=None),
+        .encode(x=X_DATE,
                 y=alt.Y("target_lo:Q", title=T["ax_percent"],
-                        scale=alt.Scale(zero=False)),
+                        scale=alt.Scale(zero=False),
+                        axis=alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)),
                 y2="target_hi:Q"))
 rates = d.melt(id_vars="date", value_vars=["sofr", "award_pct"],
                var_name="series", value_name="pct").dropna()
@@ -164,17 +176,18 @@ rates["series"] = rates["series"].map(dict(zip(["sofr", "award_pct"], SERIES)))
 rates["date_s"] = date_col(rates["date"])
 rates["pct_s"] = fmt_col(rates["pct"], 2)
 lines = (alt.Chart(rates).mark_line(strokeWidth=2)
-         .encode(x=alt.X("date:T", title=None),
+         .encode(x=X_DATE,
                  y=alt.Y("pct:Q", title=T["ax_percent"], scale=alt.Scale(zero=False)),
                  color=alt.Color("series:N", title=None,
-                                 scale=alt.Scale(domain=SERIES, range=[BLUE, ORANGE])),
+                                 scale=alt.Scale(domain=SERIES, range=[BLUE, ORANGE]),
+                                 legend=alt.Legend(orient="top")),
                  tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
                           alt.Tooltip("series:N", title=T["tt_series"]),
                           alt.Tooltip("pct_s:N", title=T["tt_percent"])]))
 # The corridor is 25bp wide on an axis spanning five percentage points, so the
 # band is a sliver and the position inside it cannot be read off the rates. The
-# second panel plots that position directly, in basis points, sharing the
-# x-axis. Two panels rather than a second y-scale on one.
+# second panel plots that position directly, in basis points, on the same
+# dates. Two panels rather than a second y-scale on one.
 # 17 September 2019 reaches 325 bp against a normal range of about -10 to +30,
 # so the axis is clipped to keep the rest readable and the spike is labelled
 # rather than dropped.
@@ -183,10 +196,11 @@ inside["date_s"] = date_col(inside["date"])
 inside["carry_s"] = fmt_col(inside["carry_bp"], 1)
 CLIP_HI = 70
 pos = (alt.Chart(inside).mark_line(strokeWidth=2, color=BLUE, clip=True)
-       .encode(x=alt.X("date:T", title=None),
+       .encode(x=X_DATE,
                y=alt.Y("carry_bp:Q",
                        title=T["ax_position"].format(clip=CLIP_HI),
-                       scale=alt.Scale(domain=[-15, CLIP_HI])),
+                       scale=alt.Scale(domain=[-15, CLIP_HI]),
+                       axis=alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)),
                tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
                         alt.Tooltip("carry_s:N", title=T["tt_carry"])]))
 # Only the single largest day is labelled. Annotating every clipped spike put
@@ -199,12 +213,10 @@ pos = pos + (alt.Chart(top).mark_text(align="left", dx=6, font=FONT,
              .encode(x="date:T", y=alt.Y("y:Q"), text="lab:N"))
 floor = (alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1)
          .encode(y="y:Q"))
-st.altair_chart(style(alt.vconcat(
-    (band + lines).properties(height=260,
-                              title=T["ch_band"]),
-    (pos + floor).properties(height=150,
-                             title=T["ch_position"]),
-).resolve_scale(x="shared")), width="stretch")
+st.altair_chart(style((band + lines).properties(height=340, title=T["ch_band"])),
+                width="stretch")
+st.altair_chart(style((pos + floor).properties(height=320, title=T["ch_position"])),
+                width="stretch")
 st.caption(T["cap1"])
 
 st.divider()
