@@ -2,15 +2,22 @@
 
 Streamlit app for the Machine Learning with R project (emlyon, 1BLAML).
 Reads the precomputed files in data/processed so the page loads without
-refitting anything:
-    daily.csv           one row per SOFR date
-    oos_predictions.csv walk-forward forecasts and benchmarks
-    carry_backtest.csv  the cash placement rule
+refitting anything.
+
+Design and language. The colour scheme comes from src/design.py, which holds
+four validated options; pick one with the REPO_DESIGN environment variable or
+by editing ACTIVE there, then run `python src/design.py <name>` to regenerate
+.streamlit/config.toml. Light and dark palettes are both declared, so the
+viewer switches theme through Streamlit's own Settings menu and the charts
+follow via st.context.theme. There is no custom theme toggle because
+Streamlit has no API to set its own theme at runtime, and faking it with
+injected CSS leaves the page header in the wrong colours.
 
 Run locally:  streamlit run app.py
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import altair as alt
@@ -18,18 +25,42 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from design import DESIGNS, active_name  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent
 PROC = ROOT / "data" / "processed"
 
-# Validated against the light chart surface #fcfcfb with the dataviz palette
-# validator: all six checks pass in light and dark. The app pins the light
-# theme in .streamlit/config.toml so these are the colours that render.
-BLUE, ORANGE, RED = "#2a78d6", "#eb6834", "#e34948"
-INK, MUTED, GRID = "#0b0b0b", "#898781", "#e1e0d9"
-BAND = "#e1e0d9"
-FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif"
+DESIGN = DESIGNS[active_name()]
+
+
+def theme_mode() -> str:
+    """light or dark, as the viewer's browser and Streamlit settled it."""
+    try:
+        t = st.context.theme
+        return getattr(t, "type", None) or "light"
+    except Exception:
+        return "light"
+
+
+MODE = theme_mode()
+C = DESIGN[MODE]
+BLUE, ORANGE, RED = C["blue"], C["orange"], C["red"]
+INK, MUTED, GRID, BAND = C["ink"], C["muted"], C["grid"], C["band"]
+FONT = DESIGN["body_font"]
+HEAD = DESIGN["head_font"]
 
 st.set_page_config(page_title="Repo in the Fed's corridor", layout="wide")
+
+st.html(
+    """<style>
+  /* Fonts come from .streamlit/config.toml (theme.font / theme.headingFont),
+     which is the supported route. Only numeral alignment is set here. */
+  [data-testid="stMetricValue"], [data-testid="stTable"], table {
+      font-variant-numeric: tabular-nums;
+  }
+</style>"""
+)
 
 
 @st.cache_data
@@ -43,6 +74,7 @@ def load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 def style(chart: alt.Chart) -> alt.Chart:
     return (chart
             .configure_view(strokeWidth=0)
+            .configure(background="transparent")
             .configure_axis(labelFont=FONT, titleFont=FONT, labelColor=MUTED,
                             titleColor=MUTED, gridColor=GRID, domainColor=GRID,
                             tickColor=GRID, labelFontSize=12, titleFontSize=12)
