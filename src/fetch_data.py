@@ -20,6 +20,7 @@ Nothing is invented: a series that fails is reported and skipped.
 from __future__ import annotations
 
 import io
+import os
 import sys
 import time
 from datetime import date
@@ -29,6 +30,8 @@ import pandas as pd
 import requests
 
 ROOT = Path(__file__).resolve().parent.parent
+if "--root" in sys.argv:  # same option as build_dataset.py and model_lasso.py
+    ROOT = Path(sys.argv[sys.argv.index("--root") + 1])
 RAW = ROOT / "data" / "raw"
 START_YEAR = 2018  # SOFR was first published in April 2018
 START_DATE = "2018-04-01"
@@ -276,6 +279,9 @@ def run(name: str, job, refresh: bool) -> pd.DataFrame | None:
 
 def main() -> int:
     args = sys.argv[1:]
+    if "--root" in args:
+        i = args.index("--root")
+        args = args[:i] + args[i + 2:]
     refresh_all = args == ["--refresh"]
     names = {a for a in args if not a.startswith("--")}  # e.g. --refresh tga rrp
     refresh = lambda n: refresh_all or ("--refresh" in args and n in names)
@@ -286,10 +292,14 @@ def main() -> int:
     failed = [n for n, job in required.items() if run(n, job, refresh(n)) is None]
 
     print("\nOptional (FRED):")
-    skipped = [
-        sid for sid in FRED_OPTIONAL
-        if run(sid.lower(), (lambda s=sid: fetch_fred(s)), refresh(sid.lower())) is None
-    ]
+    if os.environ.get("REPO_SKIP_FRED"):  # set in CI, where FRED is not needed
+        print("  skipped: REPO_SKIP_FRED is set")
+        skipped: list[str] = []
+    else:
+        skipped = [
+            sid for sid in FRED_OPTIONAL
+            if run(sid.lower(), (lambda s=sid: fetch_fred(s)), refresh(sid.lower())) is None
+        ]
 
     if failed:
         print("\nRequired series failed:", ", ".join(failed))

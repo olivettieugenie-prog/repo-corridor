@@ -41,6 +41,29 @@ The page switches between English and French from the control at the top right; 
 
     python -m unittest discover -s tests -v   # same keys in both languages; app runs in EN/FR, light/dark
 
+## Live forecast
+
+`src/forecast_next.py` downloads every required series again, rebuilds the daily table in a scratch directory (`.live_work/`, so the committed files are untouched), fits the same two-stage model on the latest 500 days and forecasts the deviation for the next settlement day, with the 80% interval from the last 250 walk-forward errors. Each run appends one row to `data/live/forecast.csv`, and fills in the realised value of every earlier row whose target date has since been published. `tests/test_live.py` checks that the live feature row, model fit and SOFR mapping reproduce `model_lasso.py` and `build_dataset.py` exactly.
+
+    REPO_SKIP_FRED=1 python src/forecast_next.py
+
+`.github/workflows/daily.yml` runs it at 14:30 UTC on weekdays (and by hand through workflow_dispatch) and commits the log to the `data` branch, so main's history carries no daily commits. The app reads that file from GitHub, hourly, and falls back to the local copy.
+
+What exists when the job runs, on settlement day D at 9:30 a.m. ET (winter) or 10:30 a.m. ET (summer):
+
+| series | source | published | latest at run time | used by the model as |
+|---|---|---|---|---|
+| SOFR, percentiles, volume | NY Fed | about 8:00 a.m. ET, next business day; revisable about 2:30 p.m. | D−1 | day t = D−1 |
+| EFFR and target range | NY Fed | about 9:00 a.m. ET, next business day; revisable about 2:30 p.m. | D−1 | day t = D−1 |
+| ON RRP take-up and award rate | NY Fed | same day, after the 1:15 p.m. ET close | D−1 | t−1 = D−2 |
+| TGA closing balance | Daily Treasury Statement | 4:00 p.m. ET, next business day | D−2 | t−1 = D−2 |
+| Calendar flags | rules | known in advance | D | target day D |
+| Target range on D | implementation-note table | FOMC decision 2:00 p.m. ET, effective next day | needs a table row | `range_unconfirmed` = 1 if missing after an FOMC meeting |
+
+So the forecast for D is available only on the morning of D: the model needs SOFR for D−1, which the NY Fed publishes at 8:00 a.m. on D. It is a same-day nowcast of the rate that D's trades will set, not a decision made the evening before.
+
+Business days follow the US government securities settlement calendar in `src/market_calendar.py`. It matches every SOFR publication date since April 2018. Against pandas' `USFederalHolidayCalendar` it adds Good Friday, keeps the Friday before a Saturday New Year's Day or Veterans Day open, starts Juneteenth in 2022, and adds the 5 December 2018 closure.
+
 ## Data
 
 SOFR, EFFR with the Fed target range, and ON RRP come from the NY Fed API. The Treasury General Account (TGA) closing balance comes from the Treasury Fiscal Data API (Daily Treasury Statement), which changed its row labels twice, in October 2021 and April 2022. FRED timed out from the author's network and is optional.

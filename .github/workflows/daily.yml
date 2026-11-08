@@ -1,0 +1,77 @@
+name: Daily forecast
+
+# 14:30 UTC is 9:30 a.m. ET in winter (EST) and 10:30 a.m. ET in summer (EDT):
+# after SOFR (about 8:00 a.m. ET) and EFFR with the target range (about
+# 9:00 a.m. ET) are published in both. GitHub may start a scheduled run late,
+# never early. On a settlement holiday no new SOFR exists, so the run repeats
+# the previous target and the app keeps the latest row per target date.
+on:
+  schedule:
+    - cron: "30 14 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-forecast
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Restore the forecast log from the data branch
+        run: |
+          mkdir -p data/live
+          if git ls-remote --exit-code --heads origin data > /dev/null; then
+            git fetch --depth=1 origin data
+            git show FETCH_HEAD:data/live/forecast.csv > data/live/forecast.csv
+            echo "restored $(($(wc -l < data/live/forecast.csv) - 1)) rows"
+          else
+            echo "no data branch yet; starting a new log"
+          fi
+
+      - name: Forecast
+        env:
+          REPO_SKIP_FRED: "1"
+        run: python src/forecast_next.py
+
+      - name: Commit the log to the data branch
+        run: |
+          set -euo pipefail
+          db="$RUNNER_TEMP/databranch"
+          if git ls-remote --exit-code --heads origin data > /dev/null; then
+            git worktree add -B data "$db" FETCH_HEAD
+          else
+            git worktree add --detach "$db"
+            git -C "$db" checkout --orphan data
+            git -C "$db" rm -rq --cached .
+            find "$db" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          fi
+          mkdir -p "$db/data/live"
+          cp data/live/forecast.csv "$db/data/live/forecast.csv"
+          cd "$db"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/live/forecast.csv
+          if git diff --cached --quiet; then
+            echo "nothing new to commit"
+          else
+            git commit -q -m "Live forecast, run of $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin data
+          fi
