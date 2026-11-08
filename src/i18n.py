@@ -128,6 +128,21 @@ EN: dict[str, object] = {
         "2020 and 2021 because the rolling window has to pass through the "
         "regime break before it adapts."
     ),
+    "ch_fan": "Forecast, 80% interval and outcome, last 250 days",
+    "ax_dev": "deviation, bp",
+    "fan_inside": "outcome inside the interval",
+    "fan_outside": "outcome outside",
+    "tt_outcome": "outcome, bp",
+    "tt_forecast": "forecast, bp",
+    "tt_band": "80% interval, bp",
+    "cap_fan": (
+        "The line is the two-stage forecast of the next day's deviation; the "
+        "band runs from the 10th to the 90th percentile of the previous 250 "
+        "forecast errors only, so it never sees the day it covers. Since May "
+        "2021 it holds the outcome on {all}% of days, {other}% outside "
+        "month-ends, but only {me}% on month-ends and {qe}% on quarter-ends, "
+        "where errors are larger than the pooled errors suggest."
+    ),
     "cap3_dm": (
         "Is the gain significant? A Diebold-Mariano test on squared errors, "
         "with a HAC variance, finds it significant from 2024 onwards "
@@ -295,6 +310,22 @@ FR: dict[str, object] = {
         "sens des barres porte le signe, la couleur n'est donc pas le seul "
         "repère. Le modèle perd en 2020 et 2021, car la fenêtre glissante doit "
         "traverser la rupture de régime avant de s'adapter."
+    ),
+    "ch_fan": "Prévision, intervalle à 80 % et réalisation, 250 derniers jours",
+    "ax_dev": "déviation, pb",
+    "fan_inside": "réalisation dans l'intervalle",
+    "fan_outside": "réalisation hors intervalle",
+    "tt_outcome": "réalisation, pb",
+    "tt_forecast": "prévision, pb",
+    "tt_band": "intervalle à 80 %, pb",
+    "cap_fan": (
+        "La courbe est la prévision en deux étapes de la déviation du "
+        "lendemain ; la bande va du 10e au 90e centile des 250 erreurs de "
+        "prévision précédentes uniquement, sans jamais voir le jour qu'elle "
+        "couvre. Depuis mai 2021, elle contient la réalisation {all} % des "
+        "jours, {other} % hors fins de mois, mais seulement {me} % les fins "
+        "de mois et {qe} % les fins de trimestre, où les erreurs dépassent ce "
+        "que suggère l'ensemble des erreurs."
     ),
     "cap3_dm": (
         "Le gain est-il significatif ? Un test de Diebold-Mariano sur les "

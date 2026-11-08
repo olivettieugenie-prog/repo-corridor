@@ -23,6 +23,7 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
     python src/model_lasso.py      # walk-forward LASSO vs AR benchmarks
     python src/model_compare.py    # five stage-two models, including trees
     python src/dm_test.py          # Diebold-Mariano test against AR(1)
+    python src/intervals.py        # 80% intervals from past errors only
     python src/backtest_carry.py   # the cash placement rule
     streamlit run app.py           # the app
 
@@ -81,6 +82,8 @@ A single penalty across all coefficients loses to AR(1), at R² −0.07 against 
 An expanding training window also loses, at −0.11 against AR(1), because the calendar effects are regime-dependent. The month-end premium is +9.6 bp in 2018 and +13.3 bp in 2019, essentially zero from 2020 to 2022 (+0.05, +0.07, +0.01), then +2.0, +3.5, +8.7 and +3.6 bp from 2023 to 2026. A model that weights every regime equally fits none of them. With a rolling 500-day window the two-stage model beats AR(1) by +0.04 overall and +0.13 from 2024 onwards, and by year it is +0.07 in 2024, +0.17 in 2025 and +0.08 in 2026.
 
 **Is the gain significant? From 2024, yes. Over the full sample, no.** A Diebold-Mariano test on squared errors (`src/dm_test.py`: Newey-West HAC variance with automatic lag, Harvey-Leybourne-Newbold correction, Student t critical values) gives −3.71 from 2024 onwards, p = 0.0002. 2024 and 2025 are significant on their own (p = 0.008 and 0.005); 2026 to date is not (p = 0.22). Over the whole out-of-sample period from May 2020 the +0.04 is **not** significant (p = 0.26), because the model is significantly worse than AR(1) in 2020 (p = 0.0005). In 2022 the second stage selected nothing, so the forecasts equal AR(1) and the test is undefined. The full table is in `data/processed/dm_test.csv`.
+
+**Prediction intervals.** `src/intervals.py` gives every out-of-sample forecast an 80% interval from the 10th and 90th percentiles of the previous 250 forecast errors, using only errors whose target date came before the forecast; a test that perturbs every later outcome checks there is no look-ahead. From May 2021 the interval covers 78.5% of outcomes overall and 79.5% outside month-ends, but only 58.5% on month-ends (65 days) and 36% on quarter-ends (22 days). Pooled errors understate month-end risk. Table in `data/processed/interval_coverage.csv`; bounds are the `lo80` and `hi80` columns of `oos_predictions.csv`.
 
 The economics behind that is the point of the project. Calendar pressure only bites when reserves are scarce. In 2020 to 2022, with ON RRP usage around $2.0tn, month-end balance-sheet constraints had nothing to push against and the premium disappeared. As reserves drained it returned. The model selects month-end, mid-month settlement, quarter-end and month-start on the residual; the balance-sheet levels are selected rarely and with small coefficients.
 

@@ -301,6 +301,39 @@ st.altair_chart(style((dv + zero + dlab).properties(
 st.caption(T["cap3"])
 st.caption(T["cap3_dm"].format(**DM_ARGS))
 
+# Forecast against outcome with the 80% interval from src/intervals.py, which
+# uses only errors of forecasts whose target date came before.
+fan = o.dropna(subset=["lo80"]).tail(250).copy()
+fan["inside"] = np.where((fan["y"] >= fan["lo80"]) & (fan["y"] <= fan["hi80"]),
+                         T["fan_inside"], T["fan_outside"])
+fan["date_s"] = date_col(fan["date"])
+fan["y_s"] = fmt_col(fan["y"], 1)
+fan["f_s"] = fmt_col(fan["two_stage"], 1)
+fan["band_s"] = fmt_col(fan["lo80"], 1) + " ; " + fmt_col(fan["hi80"], 1)
+fan_tt = [alt.Tooltip("date_s:N", title=T["tt_date"]),
+          alt.Tooltip("y_s:N", title=T["tt_outcome"]),
+          alt.Tooltip("f_s:N", title=T["tt_forecast"]),
+          alt.Tooltip("band_s:N", title=T["tt_band"])]
+fx = alt.X("date:T", title=None)
+fband = (alt.Chart(fan).mark_area(opacity=0.7, color=BAND)
+         .encode(x=fx, y=alt.Y("lo80:Q", title=T["ax_dev"]), y2="hi80:Q"))
+fline = (alt.Chart(fan).mark_line(strokeWidth=1.5, color=BLUE)
+         .encode(x=fx, y="two_stage:Q", tooltip=fan_tt))
+fdots = (alt.Chart(fan).mark_point(filled=True, size=18)
+         .encode(x=fx, y="y:Q",
+                 color=alt.Color("inside:N", title=None,
+                                 scale=alt.Scale(domain=[T["fan_inside"], T["fan_outside"]],
+                                                 range=[MUTED, RED]),
+                                 legend=alt.Legend(orient="top")),
+                 tooltip=fan_tt))
+st.altair_chart(style((fband + fline + fdots).properties(height=300, title=T["ch_fan"])),
+                width="stretch")
+cov = pd.read_csv(PROC / "interval_coverage.csv").set_index("group")["coverage"]
+st.caption(T["cap_fan"].format(all=n(100 * cov["all"], 1),
+                               me=n(100 * cov["month-end"], 1),
+                               qe=n(100 * cov["quarter-end"], 1),
+                               other=n(100 * cov["other days"], 1)))
+
 st.subheader(T["s3b"])
 imp = pd.read_csv(PROC / "permutation_importance.csv")
 KINDS = [T["kind_one"], T["kind_group"]]
