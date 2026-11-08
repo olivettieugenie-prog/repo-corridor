@@ -120,7 +120,7 @@ def r2(y, p, base) -> float:
 
 daily, oos, carry = load()
 
-head, switch = st.columns([6, 1], vertical_alignment="center")
+head, switch = st.columns([5, 1], vertical_alignment="center")
 with switch, st.container(horizontal=True, horizontal_alignment="right"):
     st.segmented_control(T["lang_label"], LANGS, format_func=LANG_NAMES.get,
                          key="lang", required=True, label_visibility="collapsed")
