@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import os
+import ssl
 import urllib.request
 from pathlib import Path
 
@@ -24,6 +25,18 @@ RAW_URL = ("https://raw.githubusercontent.com/olivettieugenie-prog/repo-corridor
            "data/data/live/forecast.csv")
 LOCAL = Path(os.environ.get("REPO_LIVE_LOCAL", ROOT / "data" / "live" / "forecast.csv"))
 DATES = ["as_of_date", "target_date"]
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """certifi's CA bundle when it is installed, the system's otherwise.
+    The python.org builds for macOS ship without system root certificates
+    until "Install Certificates.command" is run, and urllib then fails every
+    HTTPS fetch; certifi avoids that without adding a dependency."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
 
 
 def _parse(text: str) -> pd.DataFrame:
@@ -39,7 +52,7 @@ def load(url: str | None = None, local: Path | None = None, timeout: float = 10)
     local = Path(local or os.environ.get("REPO_LIVE_LOCAL", LOCAL))
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "repo-corridor-app"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
             text = r.read().decode("utf-8")
         df = _parse(text)
         try:
