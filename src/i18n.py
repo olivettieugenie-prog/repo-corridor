@@ -52,6 +52,72 @@ EN: dict[str, object] = {
     "bp": "bp",
     "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+
+    # desk view
+    "desk_title": "Tomorrow's call",
+    "desk_target": "Target date: **{target}**",
+    "desk_forecast": "Deviation forecast",
+    "desk_range": "80% range: {lo} to {hi} bp",
+    "desk_sofr": "Implied SOFR",
+    "desk_sofr_range": "80% range: {lo} to {hi}%",
+    "desk_flags": "Calendar flags in play: {flags}",
+    "desk_no_flags": "none",
+    "desk_level": "{v} bn",
+    "desk_level_help": "Level on {date}, with its change from the previous day",
+    "flag_month_end": "month-end",
+    "flag_quarter_end": "quarter-end",
+    "flag_year_end": "year-end",
+    "flag_mid_settle": "mid-month settlement",
+    "flag_month_start": "month start",
+    "flag_rate_change": "target-range change",
+    "desk_asof": (
+        "Run {run} New York time, on data to {asof}. Two-stage LASSO on the "
+        "latest 500 days; the range comes from the last 250 forecast errors."
+    ),
+    "desk_stale": (
+        "This forecast is out of date: it targets {target}, more than one "
+        "business day ago. The daily job may have failed."
+    ),
+    "desk_unconfirmed": (
+        "{target} follows an FOMC decision that is not yet in the "
+        "administered-rate table, so the implied SOFR assumes an unchanged "
+        "target range."
+    ),
+    "note_line1": (
+        "For {target}, the model puts SOFR {abs} bp {direction} its 60-day "
+        "median position in the corridor, with an 80% range of {lo} to {hi} bp; "
+        "that implies SOFR at {sofr}%."
+    ),
+    "note_flat": (
+        "For {target}, the model puts SOFR in line with its 60-day median "
+        "position in the corridor ({f} bp, 80% range {lo} to {hi} bp); that "
+        "implies SOFR at {sofr}%."
+    ),
+    "dir_above": "above",
+    "dir_below": "below",
+    "note_line2_flags": (
+        "In play: {flags}. ON RRP stands at {rrp} bn ({drrp} bn on the day) "
+        "and the TGA at {tga} bn ({dtga} bn)."
+    ),
+    "note_line2_none": (
+        "No calendar effect in play. ON RRP stands at {rrp} bn ({drrp} bn on "
+        "the day) and the TGA at {tga} bn ({dtga} bn)."
+    ),
+    "desk_track": (
+        "Live track record, {n} scored days since {start}: the 80% range held "
+        "the outcome on {hit}% of them, and the RMSE is {rmse} bp against "
+        "{rmse_ar1} bp for AR(1) on the same days."
+    ),
+    "desk_track_pending": (
+        "Live track record started on {start}; {n} of 20 scored days so far. "
+        "The hit rate and the RMSE against AR(1) appear from 20 days."
+    ),
+    "desk_src_local": "The data branch on GitHub could not be reached; showing the local copy.",
+    "desk_none": (
+        "No live forecast is available yet. It appears after the first run of "
+        "the daily workflow."
+    ),
 
     # stat tiles
     "tile_days": "SOFR days covered",
@@ -236,6 +302,74 @@ FR: dict[str, object] = {
     "bp": "pb",
     "months": ["janv.", "févr.", "mars", "avr.", "mai", "juin",
                "juil.", "août", "sept.", "oct.", "nov.", "déc."],
+    "weekdays": ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."],
+
+    "desk_title": "La prévision pour demain",
+    "desk_target": "Date cible : **{target}**",
+    "desk_forecast": "Déviation prévue",
+    "desk_range": "Intervalle à 80 % : {lo} à {hi} pb",
+    "desk_sofr": "SOFR implicite",
+    "desk_sofr_range": "Intervalle à 80 % : {lo} à {hi} %",
+    "desk_flags": "Effets de calendrier en jeu : {flags}",
+    "desk_no_flags": "aucun",
+    "desk_level": "{v} Md USD",
+    "desk_level_help": "Niveau au {date}, avec sa variation sur la veille",
+    "flag_month_end": "fin de mois",
+    "flag_quarter_end": "fin de trimestre",
+    "flag_year_end": "fin d'année",
+    "flag_mid_settle": "règlement de mi-mois",
+    "flag_month_start": "début de mois",
+    "flag_rate_change": "changement de fourchette cible",
+    "desk_asof": (
+        "Calcul du {run}, heure de New York, sur les données au {asof}. LASSO "
+        "en deux étapes sur les 500 derniers jours ; l'intervalle provient des "
+        "250 dernières erreurs de prévision."
+    ),
+    "desk_stale": (
+        "Cette prévision n'est plus à jour : elle porte sur le {target}, il y a "
+        "plus d'un jour ouvré. La tâche quotidienne a peut-être échoué."
+    ),
+    "desk_unconfirmed": (
+        "Le {target} suit une décision du FOMC qui ne figure pas encore dans "
+        "le tableau des taux administrés ; le SOFR implicite suppose une "
+        "fourchette cible inchangée."
+    ),
+    "note_line1": (
+        "Pour le {target}, le modèle situe le SOFR {abs} pb {direction} de sa "
+        "position médiane sur 60 jours dans le corridor, avec un intervalle à "
+        "80 % de {lo} à {hi} pb, soit un SOFR implicite de {sofr} %."
+    ),
+    "note_flat": (
+        "Pour le {target}, le modèle situe le SOFR en ligne avec sa position "
+        "médiane sur 60 jours dans le corridor ({f} pb, intervalle à 80 % de "
+        "{lo} à {hi} pb), soit un SOFR implicite de {sofr} %."
+    ),
+    "dir_above": "au-dessus",
+    "dir_below": "en dessous",
+    "note_line2_flags": (
+        "En jeu : {flags}. L'ON RRP s'établit à {rrp} Md USD ({drrp} Md sur la "
+        "journée) et le TGA à {tga} Md USD ({dtga} Md)."
+    ),
+    "note_line2_none": (
+        "Aucun effet de calendrier en jeu. L'ON RRP s'établit à {rrp} Md USD "
+        "({drrp} Md sur la journée) et le TGA à {tga} Md USD ({dtga} Md)."
+    ),
+    "desk_track": (
+        "Historique en conditions réelles, {n} jours évalués depuis le "
+        "{start} : l'intervalle à 80 % a contenu la réalisation {hit} % du "
+        "temps, pour une RMSE de {rmse} pb contre {rmse_ar1} pb pour l'AR(1) "
+        "sur les mêmes jours."
+    ),
+    "desk_track_pending": (
+        "Historique en conditions réelles commencé le {start} ; {n} jours "
+        "évalués sur 20. Le taux de couverture et la RMSE face à l'AR(1) "
+        "s'afficheront à partir de 20 jours."
+    ),
+    "desk_src_local": "La branche data sur GitHub est injoignable ; affichage de la copie locale.",
+    "desk_none": (
+        "Aucune prévision en conditions réelles n'est encore disponible. Elle "
+        "apparaîtra après la première exécution de la tâche quotidienne."
+    ),
 
     "tile_days": "Jours de SOFR couverts",
     "tile_days_help": "Du 2 avril 2018 au 26 octobre 2026, via l'API de la Fed de New York",
@@ -423,6 +557,6 @@ def _apply(v, f):
 
 STRINGS: dict[str, dict[str, object]] = {
     "en": EN,
-    "fr": {k: (v if k == "months" else _apply(v, _fr_typography))
+    "fr": {k: (v if k in ("months", "weekdays") else _apply(v, _fr_typography))
            for k, v in FR.items()},
 }

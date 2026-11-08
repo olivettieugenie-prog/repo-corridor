@@ -70,7 +70,7 @@ class TestAppRuns(unittest.TestCase):
                     self.assertEqual(len(at.exception), 0, at.exception)
                     self.assertEqual(at.session_state["lang"], lang)
                     self.assertEqual(at.title[0].value, STRINGS[lang]["title"])
-                    self.assertEqual(at.subheader[0].value, STRINGS[lang]["s1"])
+                    self.assertIn(STRINGS[lang]["s1"], [h.value for h in at.subheader])
 
     def test_default_is_english(self):
         at = self.run_app("en", "light")

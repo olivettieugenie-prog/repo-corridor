@@ -62,6 +62,8 @@ What exists when the job runs, on settlement day D at 9:30 a.m. ET (winter) or 1
 
 So the forecast for D is available only on the morning of D: the model needs SOFR for D−1, which the NY Fed publishes at 8:00 a.m. on D. It is a same-day nowcast of the rate that D's trades will set, not a decision made the evening before.
 
+The desk view at the top of the app shows the latest run: target date, the deviation forecast with its 80% range, the implied SOFR level, the calendar flags in play, ON RRP and TGA with their daily change, and a two-line note filled from a fixed template in `src/i18n.py` (`src/desk.py` holds the logic). The implied level is exact, not approximate: `build_dataset.py` defines the deviation as SOFR minus the top of the target range minus the trailing 60-day median of that spread, all known the day before, so SOFR = top of range + (median + deviation) / 100, which `tests/test_live.py` checks on every day of the data. The panel warns when the forecast targets a day more than one business day back, and shows the hit rate and RMSE against AR(1) once 20 target days have been scored; until then it shows when the live record began.
+
 Business days follow the US government securities settlement calendar in `src/market_calendar.py`. It matches every SOFR publication date since April 2018. Against pandas' `USFederalHolidayCalendar` it adds Good Friday, keeps the Friday before a Saturday New Year's Day or Veterans Day open, starts Juneteenth in 2022, and adds the 5 December 2018 closure.
 
 ## Data

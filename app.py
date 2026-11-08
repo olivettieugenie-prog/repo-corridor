@@ -36,6 +36,8 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from design import DESIGNS, active_name  # noqa: E402
 from i18n import LANG_NAMES, LANGS, STRINGS, date_short, num  # noqa: E402
+import desk  # noqa: E402
+import live_feed  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 PROC = ROOT / "data" / "processed"
@@ -124,6 +126,65 @@ with switch, st.container(horizontal=True, horizontal_alignment="right"):
                          key="lang", required=True, label_visibility="collapsed")
 head.title(T["title"])
 st.markdown(T["intro"])
+
+
+# ---------------------------------------------------------------- desk view
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_live(url: str, local: str) -> tuple[pd.DataFrame | None, str]:
+    return live_feed.load(url, Path(local))
+
+
+def desk_view() -> None:
+    import os
+    live, source = load_live(os.environ.get("REPO_LIVE_URL", live_feed.RAW_URL),
+                             os.environ.get("REPO_LIVE_LOCAL", str(live_feed.LOCAL)))
+    with st.container(border=True):
+        st.subheader(T["desk_title"])
+        if live is None:
+            st.info(T["desk_none"])
+            return
+        if source == "local":
+            st.caption(T["desk_src_local"])
+        live = live_feed.latest_per_target(live)
+        row = live.iloc[-1]
+        target = desk.long_date(row["target_date"], LANG)
+        if desk.is_stale(row["target_date"], os.environ.get("REPO_TODAY")):
+            st.warning(T["desk_stale"].format(target=target))
+        if int(row.get("range_unconfirmed", 0) or 0):
+            st.warning(T["desk_unconfirmed"].format(target=target))
+
+        st.markdown(T["desk_target"].format(target=target))
+        k2, k3, k4, k5 = st.columns(4)
+        k2.metric(T["desk_forecast"], f"{n(row['forecast_bp'], 1, sign=True)}\u00a0{BP}")
+        k2.caption(T["desk_range"].format(lo=n(row["lower_bp"], 1, sign=True),
+                                          hi=n(row["upper_bp"], 1, sign=True)))
+        if pd.notna(row.get("implied_sofr_pct")):
+            k3.metric(T["desk_sofr"], f"{n(row['implied_sofr_pct'], 2)}\u00a0%")
+            k3.caption(T["desk_sofr_range"].format(lo=n(row["implied_sofr_lo_pct"], 2),
+                                                   hi=n(row["implied_sofr_hi_pct"], 2)))
+        for col, name, lvl, chg, dt, dec in (
+                (k4, "ON RRP", row["rrp_bn"], row["d_rrp_bn"], row["rrp_date"], 1),
+                (k5, "TGA", row["tga_bn"], row["d_tga_bn"], row["tga_date"], 0)):
+            col.metric(name, T["desk_level"].format(v=n(lvl, dec)),
+                       delta=n(chg, dec, sign=True), delta_color="off",
+                       help=T["desk_level_help"].format(date=desk.long_date(dt, LANG)))
+
+        flags = desk.flags_in_play(row, LANG)
+        st.markdown(T["desk_flags"].format(flags=", ".join(flags) or T["desk_no_flags"]))
+        line1, line2 = desk.morning_note(row, LANG)
+        st.markdown(f"> {line1}  \n> {line2}")
+        st.caption(T["desk_asof"].format(run=desk.run_time_et(row["run_time_utc"], LANG),
+                                         asof=desk.long_date(row["as_of_date"], LANG)))
+        tr = desk.track_record(live)
+        start = desk.long_date(tr["start"], LANG)
+        if "hit" in tr:
+            st.caption(T["desk_track"].format(n=tr["n"], start=start, hit=n(100 * tr["hit"], 0),
+                                              rmse=n(tr["rmse"], 2), rmse_ar1=n(tr["rmse_ar1"], 2)))
+        else:
+            st.caption(T["desk_track_pending"].format(start=start, n=tr["n"]))
+
+
+desk_view()
 
 # ---------------------------------------------------------------- stat tiles
 usable = carry
