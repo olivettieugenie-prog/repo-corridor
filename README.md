@@ -22,6 +22,7 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
     python src/build_dataset.py    # merge into data/processed/daily.csv
     python src/model_lasso.py      # walk-forward LASSO vs AR benchmarks
     python src/model_compare.py    # five stage-two models, including trees
+    python src/dm_test.py          # Diebold-Mariano test against AR(1)
     python src/backtest_carry.py   # the cash placement rule
     streamlit run app.py           # the app
 
@@ -79,6 +80,8 @@ A single penalty across all coefficients loses to AR(1), at R² −0.07 against 
 
 An expanding training window also loses, at −0.11 against AR(1), because the calendar effects are regime-dependent. The month-end premium is +9.6 bp in 2018 and +13.3 bp in 2019, essentially zero from 2020 to 2022 (+0.05, +0.07, +0.01), then +2.0, +3.5, +8.7 and +3.6 bp from 2023 to 2026. A model that weights every regime equally fits none of them. With a rolling 500-day window the two-stage model beats AR(1) by +0.04 overall and +0.13 from 2024 onwards, and by year it is +0.07 in 2024, +0.17 in 2025 and +0.08 in 2026.
 
+**Is the gain significant? From 2024, yes. Over the full sample, no.** A Diebold-Mariano test on squared errors (`src/dm_test.py`: Newey-West HAC variance with automatic lag, Harvey-Leybourne-Newbold correction, Student t critical values) gives −3.71 from 2024 onwards, p = 0.0002. 2024 and 2025 are significant on their own (p = 0.008 and 0.005); 2026 to date is not (p = 0.22). Over the whole out-of-sample period from May 2020 the +0.04 is **not** significant (p = 0.26), because the model is significantly worse than AR(1) in 2020 (p = 0.0005). In 2022 the second stage selected nothing, so the forecasts equal AR(1) and the test is undefined. The full table is in `data/processed/dm_test.csv`.
+
 The economics behind that is the point of the project. Calendar pressure only bites when reserves are scarce. In 2020 to 2022, with ON RRP usage around $2.0tn, month-end balance-sheet constraints had nothing to push against and the premium disappeared. As reserves drained it returned. The model selects month-end, mid-month settlement, quarter-end and month-start on the residual; the balance-sheet levels are selected rarely and with small coefficients.
 
 ## Testing the interaction claim: four rival specifications
@@ -123,7 +126,7 @@ The whole opportunity, with tomorrow's carry known in advance, is 0.252 bp. A ru
 
 This is the result after extending the administered-rate history back to 2018, which added 269 decision days. It did not move the conclusion, which is the point of having run it.
 
-So the model has statistical skill, at R² +0.13 against AR(1) from 2024, and that skill is worth essentially nothing here. The reason is structural: the Fed's two facilities bound the corridor so tightly that the overnight placement decision has almost no money in it. The action is confined to 2022 and 2023. In 2022 always-lend gave up 1.55 bp against the facility and every smarter rule merely gets back to zero, which is why about $2.0tn sat at ON RRP: not to chase carry, but because the facility simply paid more. From 2024 the carry is positive every day and all rules collapse onto always-lend. In 2023 the carry is so thin that switching costs take the entire benefit, and even perfect foresight nets less than always-lend.
+So the model has statistical skill, at R² +0.13 against AR(1) from 2024 (Diebold-Mariano p = 0.0002, though not significant over the full sample from 2020), and that skill is worth essentially nothing here. The reason is structural: the Fed's two facilities bound the corridor so tightly that the overnight placement decision has almost no money in it. The action is confined to 2022 and 2023. In 2022 always-lend gave up 1.55 bp against the facility and every smarter rule merely gets back to zero, which is why about $2.0tn sat at ON RRP: not to chase carry, but because the facility simply paid more. From 2024 the carry is positive every day and all rules collapse onto always-lend. In 2023 the carry is so thin that switching costs take the entire benefit, and even perfect foresight nets less than always-lend.
 
 The honest conclusion is that this is a measurement exercise about where repo prints inside the corridor, not a trading strategy.
 

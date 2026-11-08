@@ -59,7 +59,9 @@ EN: dict[str, object] = {
     "tile_skill": "Model skill vs AR(1), 2024+",
     "tile_skill_help": (
         "Out-of-sample R squared of the two-stage LASSO against an "
-        "autoregression, rolling 500-day training window"
+        "autoregression, rolling 500-day training window. Diebold-Mariano "
+        "test: significant since 2024 (p = {p24}), not over the full period "
+        "from May 2020 (R² {r2all}, p = {pall})."
     ),
     "tile_carry": "Carry from always lending",
     "tile_carry_help": (
@@ -125,6 +127,12 @@ EN: dict[str, object] = {
         "carries the sign, so colour is not the only cue. The model loses in "
         "2020 and 2021 because the rolling window has to pass through the "
         "regime break before it adapts."
+    ),
+    "cap3_dm": (
+        "Is the gain significant? A Diebold-Mariano test on squared errors, "
+        "with a HAC variance, finds it significant from 2024 onwards "
+        "(p = {p24}) but not over the whole period from May 2020 (p = {pall}): "
+        "the losses of 2020 offset the later gains."
     ),
 
     # 3b. importance
@@ -219,7 +227,9 @@ FR: dict[str, object] = {
     "tile_skill": "Apport du modèle face à l'AR(1), 2024+",
     "tile_skill_help": (
         "R² hors échantillon du LASSO en deux étapes par rapport à un modèle "
-        "autorégressif, fenêtre d'estimation glissante de 500 jours"
+        "autorégressif, fenêtre d'estimation glissante de 500 jours. Test de "
+        "Diebold-Mariano : gain significatif depuis 2024 (p = {p24}), mais pas "
+        "sur l'ensemble de la période depuis mai 2020 (R² {r2all}, p = {pall})."
     ),
     "tile_carry": "Portage du prêt systématique",
     "tile_carry_help": (
@@ -285,6 +295,12 @@ FR: dict[str, object] = {
         "sens des barres porte le signe, la couleur n'est donc pas le seul "
         "repère. Le modèle perd en 2020 et 2021, car la fenêtre glissante doit "
         "traverser la rupture de régime avant de s'adapter."
+    ),
+    "cap3_dm": (
+        "Le gain est-il significatif ? Un test de Diebold-Mariano sur les "
+        "erreurs quadratiques, avec variance HAC, le juge significatif depuis "
+        "2024 (p = {p24}), mais pas sur l'ensemble de la période depuis mai "
+        "2020 (p = {pall}) : les pertes de 2020 compensent les gains ultérieurs."
     ),
 
     "s3b": "3b. Sur quoi le modèle s'appuie-t-il réellement ?",

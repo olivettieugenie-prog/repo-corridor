@@ -134,8 +134,13 @@ peak = daily["carry_bp"].max()
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric(T["tile_days"], n(len(daily)), help=T["tile_days_help"])
+# Significance of the headline, from src/dm_test.py.
+dmt = pd.read_csv(PROC / "dm_test.csv").set_index("period")
+DM_ARGS = {"p24": n(dmt.loc["2024+", "p_two_sided"], 4),
+           "pall": n(dmt.loc["all", "p_two_sided"], 2),
+           "r2all": n(dmt.loc["all", "r2_vs_ar1"], 3, sign=True)}
 c2.metric(T["tile_skill"], n(r2(rec["y"], rec["two_stage"], rec["ar1"]), 3, sign=True),
-          help=T["tile_skill_help"])
+          help=T["tile_skill_help"].format(**DM_ARGS))
 c3.metric(T["tile_carry"], f"{n(always, 2)}\u00a0{BP}", help=T["tile_carry_help"])
 c4.metric(T["tile_peak"], f"{n(peak)}\u00a0{BP}", help=T["tile_peak_help"])
 
@@ -294,6 +299,7 @@ st.altair_chart(style((dv + zero + dlab).properties(
     height=320, title=T["ch_r2"])),
     width="stretch")
 st.caption(T["cap3"])
+st.caption(T["cap3_dm"].format(**DM_ARGS))
 
 st.subheader(T["s3b"])
 imp = pd.read_csv(PROC / "permutation_importance.csv")

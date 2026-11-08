@@ -4,3 +4,4 @@
 -r requirements.txt
 requests
 scikit-learn
+scipy
