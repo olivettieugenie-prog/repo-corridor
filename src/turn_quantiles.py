@@ -32,7 +32,10 @@ pinball loss for each quantile (lower is better) and coverage, the share of
 turns that printed at or below the forecast quantile (target 50, 90, 95%).
 
 Writes data/processed/turn_quantiles.csv (one row per turn and method) and
-data/processed/turn_quantile_scores.csv.
+data/processed/turn_quantile_scores.csv. It also refits the model on every
+month-end and quarter-end so far and writes the coefficients, in raw units,
+to data/processed/turn_quantile_coefs.csv: the app evaluates them with numpy,
+so it needs no scikit-learn at runtime.
 """
 from __future__ import annotations
 
@@ -81,6 +84,31 @@ def fit_quantiles(train: pd.DataFrame, x: pd.DataFrame) -> list[float]:
             m = QuantileRegressor(quantile=tau, alpha=0.0, solver="highs").fit(Z, train["y"])
             out.append(float(m.predict(z)[0]))
     return list(np.maximum.accumulate(out))  # no crossing: q50 <= q90 <= q95
+
+
+def final_coefs(t: pd.DataFrame) -> pd.DataFrame:
+    """Coefficients of the fit on all month-end and quarter-end turns, mapped
+    back from standardised to raw units: q = intercept + sum(coef * x)."""
+    pool = t[t["type"] != "year-end"].dropna(subset=STATE)
+    X = pool[FEATURES].to_numpy(float)
+    mu, sd = X.mean(0), X.std(0)
+    sd[sd == 0] = 1.0
+    rows = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for tau, col in zip(TAUS, QCOLS):
+            m = QuantileRegressor(quantile=tau, alpha=0.0, solver="highs").fit((X - mu) / sd, pool["y"])
+            raw = m.coef_ / sd
+            rows.append({"quantile": col, "intercept": float(m.intercept_ - np.sum(raw * mu)),
+                         **{f: float(c) for f, c in zip(FEATURES, raw)},
+                         "n_turns": len(pool), "fit_through": pool["date"].max().date()})
+    return pd.DataFrame(rows)
+
+
+def predict_coefs(coefs: pd.DataFrame, x: dict) -> list[float]:
+    """Evaluate exported coefficients for one turn; no scikit-learn needed."""
+    q = [float(r["intercept"] + sum(r[f] * x[f] for f in FEATURES)) for _, r in coefs.iterrows()]
+    return list(np.maximum.accumulate(q))
 
 
 def walk_forward(t: pd.DataFrame) -> pd.DataFrame:
@@ -162,6 +190,7 @@ def main() -> int:
     fc.to_csv(PROC / "turn_quantiles.csv", index=False)
     sc = score(fc.drop(columns="y"), t)
     sc.to_csv(PROC / "turn_quantile_scores.csv", index=False)
+    final_coefs(t).to_csv(PROC / "turn_quantile_coefs.csv", index=False)
 
     with pd.option_context("display.width", 220, "display.max_columns", 30):
         print(sc.round(3).to_string(index=False))

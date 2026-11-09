@@ -28,6 +28,8 @@ next updates the page.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 from pandas.tseries.holiday import (MO, TH, AbstractHolidayCalendar, GoodFriday, Holiday,
                                     nearest_workday, sunday_to_monday)
@@ -82,15 +84,18 @@ def business_days(start, end) -> pd.DatetimeIndex:
     return pd.date_range(start, end, freq=BDAY)
 
 
-# FOMC meetings, from https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm.
-# The second day of each meeting; a decision is announced at 2:00 p.m. ET that
-# day and takes effect on the next business day.
-FOMC_DECISION_DAYS = pd.DatetimeIndex([
-    "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
-    "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09",
-    "2027-01-27", "2027-03-17", "2027-04-28", "2027-06-09",
-    "2027-07-28", "2027-09-15", "2027-10-27", "2027-12-08",
-])
+# FOMC meetings come from data/fomc_meetings.csv, one row per scheduled
+# meeting with the Fed calendar page as its source. The decision is announced
+# at 2:00 p.m. ET on the meeting's last day and takes effect on the next
+# business day. Add rows there when the Fed publishes a new year.
+FOMC_CSV = Path(__file__).resolve().parent.parent / "data" / "fomc_meetings.csv"
+
+
+def fomc_meetings() -> pd.DataFrame:
+    return pd.read_csv(FOMC_CSV, parse_dates=["meeting_start", "meeting_end"])
+
+
+FOMC_DECISION_DAYS = pd.DatetimeIndex(fomc_meetings()["meeting_end"])
 
 
 def fomc_effective_day(d) -> bool:
