@@ -198,9 +198,11 @@ def today() -> pd.Timestamp:
 
 
 STATE = roll_cost.build_state(daily, LIVE_ROW, oos)
-COEFS = pd.read_csv(PROC / "turn_quantile_coefs.csv")
-TSCORE = (pd.read_csv(PROC / "turn_quantile_scores.csv")
-          .query("method == 'model, all turns'").set_index("type"))
+# Calibrated turn quantiles, one fit per forecast horizon, and their
+# walk-forward record at each horizon (src/turn_quantiles.py).
+COEFS = pd.read_csv(PROC / "turn_quantile_coefs_horizon.csv")
+TSCORE = (pd.read_csv(PROC / "turn_quantile_horizons.csv")
+          .query("version == 'calibrated'").set_index(["type", "horizon"]))
 
 
 def analog_table(kind: str) -> None:
@@ -233,13 +235,15 @@ def next_turns() -> None:
                 n_ye = int((daily["year_end"] == 1).sum())
                 st.caption(T["turn_ye"].format(n=n_ye))
             else:
-                q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp)
+                left = roll_cost.days_until(STATE, d)
+                q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp, left)
                 cols = st.columns(3)
                 for col, key in zip(cols, ("q50", "q90", "q95")):
                     col.metric(T[f"turn_{key}"], f"{n(q[key], 1, sign=True)}\u00a0{BP}")
                     col.caption(T["turn_level"].format(v=n(STATE.target_hi + q[key] / 100, 2)))
-                sc = TSCORE.loc[kind]
+                sc = TSCORE.loc[(kind, q["horizon"])]
                 st.caption(T["turn_cover"].format(n=int(sc["n"]), kinds=T[f"turns_{kind}"],
+                                                  h=q["horizon"], left=left,
                                                   c50=n(100 * sc["cover_q50"], 0),
                                                   c90=n(100 * sc["cover_q90"], 0),
                                                   c95=n(100 * sc["cover_q95"], 0)))

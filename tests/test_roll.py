@@ -76,6 +76,38 @@ class TestAveraging(unittest.TestCase):
         self.assertAlmostEqual(row["p90_pct"], 4.0 + q["q90"] / 100)
 
 
+class TestHorizons(unittest.TestCase):
+    HCOEFS = pd.read_csv(ROOT / "data" / "processed" / "turn_quantile_coefs_horizon.csv")
+
+    def test_closest_horizon(self):
+        hs = [1, 5, 10, 15]
+        self.assertEqual([rc.horizon_for(k, hs) for k in (0, 1, 3, 7, 8, 12, 13, 40)],
+                         [1, 1, 1, 5, 10, 10, 15, 15])
+
+    def test_days_until_counts_settlement_days(self):
+        st = state(anchor_date=pd.Timestamp("2026-11-09"))   # data as of Fri 6 Nov
+        self.assertEqual(rc.days_until(st, "2026-11-09"), 1)
+        # 9, 10, 12, 13, 16-20, 23-25, 27, 30 Nov = 14; Veterans Day and Thanksgiving closed
+        self.assertEqual(rc.days_until(st, "2026-11-30"), 14)
+
+    def test_shift_is_added(self):
+        st = state()
+        raw = self.HCOEFS[self.HCOEFS["horizon"] == 10].drop(columns="shift")
+        q_raw = rc.turn_quantiles(raw.drop(columns="horizon"), "month-end", st.scarcity, st.base_bp)
+        q_cal = rc.turn_quantiles(self.HCOEFS, "month-end", st.scarcity, st.base_bp, 9)
+        self.assertEqual(q_cal["horizon"], 10)
+        shift = self.HCOEFS[self.HCOEFS["horizon"] == 10].set_index("quantile")["shift"]
+        expect = np.maximum.accumulate([q_raw[k] + shift[k] for k in ("q50", "q90", "q95")])
+        np.testing.assert_allclose([q_cal[k] for k in ("q50", "q90", "q95")], expect)
+
+    def test_calculator_uses_horizon_of_each_turn(self):
+        st = state(anchor_date=pd.Timestamp("2026-11-09"))
+        r = rc.day_rates(rc.roll_days("2026-11-27", "2026-12-02"), st, self.HCOEFS)
+        q = rc.turn_quantiles(self.HCOEFS, "month-end", st.scarcity, st.base_bp, 15)
+        row = r.set_index("date").loc[pd.Timestamp("2026-11-30")]
+        self.assertAlmostEqual(row["central_pct"], st.target_hi + q["q50"] / 100)
+
+
 class TestBlockers(unittest.TestCase):
     def test_fomc_window_not_priced(self):
         res = rc.price("2026-12-01", "2026-12-15", 3.9, state(), COEFS)

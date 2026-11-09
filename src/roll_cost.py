@@ -15,7 +15,9 @@ Rate on each day, as SOFR = top of range + (base + deviation) / 100:
                 the last 250 one-day forecast errors.
   month-end and quarter-end
                 the turn quantile model (src/turn_quantiles.py), evaluated
-                from its exported coefficients at the current scarcity state.
+                from its exported coefficients at the current scarcity state;
+                with the per-horizon file, at the horizon closest to the
+                settlement days left and with its split-conformal shift.
   year-end      no model. The rest of the window is priced as usual and the
                 year-end is left out of the average; the result reports
                 the year-end prints of every past year (history, not a
@@ -38,7 +40,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from market_calendar import business_days, fomc_meetings, next_business_day
+from market_calendar import (business_days, fomc_meetings, next_business_day,
+                             previous_business_day)
 
 ROOT = Path(__file__).resolve().parent.parent
 FEATURES = ["is_qe", "rrp_bn_lag1", "tga_bn_lag1", "base_bp"]
@@ -107,12 +110,37 @@ def ar1_coefs(daily: pd.DataFrame, window: int = 500) -> tuple[float, float]:
     return float(c), float(phi)
 
 
-def turn_quantiles(coefs: pd.DataFrame, kind: str, scarcity: dict, base_bp: float) -> dict:
-    """q50, q90, q95 of SOFR minus top of range, bp, for a month- or quarter-end."""
+def horizon_for(days_left: int, horizons) -> int:
+    """The scored horizon closest to the settlement days left; ties go shorter."""
+    return min(sorted(horizons), key=lambda h: abs(h - days_left))
+
+
+def days_until(st: State, d) -> int:
+    """Settlement days from the state's data date to turn d: the state is as
+    of the day before the anchor, so a turn h days later is horizon h."""
+    as_of = previous_business_day(st.anchor_date)
+    return len(business_days(as_of + pd.Timedelta(days=1), pd.Timestamp(d)))
+
+
+def turn_quantiles(coefs: pd.DataFrame, kind: str, scarcity: dict, base_bp: float,
+                   days_left: int | None = None) -> dict:
+    """q50, q90, q95 of SOFR minus top of range, bp, for a month- or quarter-end.
+
+    With the per-horizon file (turn_quantile_coefs_horizon.csv) it uses the
+    horizon closest to `days_left` and adds that horizon's split-conformal
+    shift, and the result carries the horizon used. With the single fit
+    (turn_quantile_coefs.csv) it is the raw day-before model."""
     x = {"is_qe": float(kind == "quarter-end"), "base_bp": base_bp, **scarcity}
+    out = {}
+    if "horizon" in coefs.columns:
+        h = horizon_for(1 if days_left is None else days_left, coefs["horizon"].unique())
+        coefs = coefs[coefs["horizon"] == h]
+        out["horizon"] = int(h)
+    shift = coefs["shift"] if "shift" in coefs.columns else 0.0
     q = [float(r["intercept"] + sum(r[f] * x[f] for f in FEATURES)) for _, r in coefs.iterrows()]
-    q = np.maximum.accumulate(q)
-    return dict(zip(coefs["quantile"], q))
+    q = np.maximum.accumulate(np.asarray(q) + np.asarray(shift))
+    out.update(zip(coefs["quantile"], q))
+    return out
 
 
 def build_state(daily: pd.DataFrame, live_row: pd.Series | None = None,
@@ -152,7 +180,7 @@ def day_rates(days: pd.DataFrame, st: State, coefs: pd.DataFrame) -> pd.DataFram
     central, high = [], []
     for d, kind in zip(out["date"], out["kind"]):
         if kind in ("month-end", "quarter-end"):
-            q = turn_quantiles(coefs, kind, st.scarcity, st.base_bp)
+            q = turn_quantiles(coefs, kind, st.scarcity, st.base_bp, days_until(st, d))
             central.append(st.target_hi + q["q50"] / 100)
             high.append(st.target_hi + q["q90"] / 100)
             continue

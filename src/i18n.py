@@ -57,9 +57,9 @@ EN: dict[str, object] = {
     "turns_title": "Next turns",
     "turns_intro": (
         "SOFR minus the top of the target range on each turn to year-end, "
-        "from a quantile model of past month-ends and quarter-ends on "
-        "today's scarcity state: ON RRP {rrp} bn, TGA {tga} bn, 60-day median "
-        "spread {base} bp."
+        "from a quantile model of past month-ends and quarter-ends, calibrated "
+        "on its own past errors, on today's scarcity state: ON RRP {rrp} bn, "
+        "TGA {tga} bn, 60-day median spread {base} bp."
     ),
     "turn_month-end": "month-end",
     "turn_quarter-end": "quarter-end",
@@ -73,9 +73,10 @@ EN: dict[str, object] = {
     "turn_q95": "95th percentile",
     "turn_level": "SOFR {v}%",
     "turn_cover": (
-        "Walk-forward record on {n} past {kinds}: the median was at or above "
-        "the print on {c50}% of them, the 90th percentile on {c90}% and the "
-        "95th on {c95}%."
+        "Calibrated at the {h}-day horizon, the closest to the {left} "
+        "settlement days left. At that horizon, on {n} past {kinds}, the "
+        "median was at or above the print on {c50}% of them, the 90th "
+        "percentile on {c90}% and the 95th on {c95}%."
     ),
     "turn_none": "No turn left before year-end 2026.",
     "turn_ye": (
@@ -409,8 +410,9 @@ FR: dict[str, object] = {
     "turns_intro": (
         "SOFR moins le haut de la fourchette cible à chaque échéance d'ici la "
         "fin d'année, selon un modèle de quantiles estimé sur les fins de mois "
-        "et de trimestre passées, à l'état de rareté actuel : ON RRP {rrp} Md "
-        "USD, TGA {tga} Md USD, écart médian sur 60 jours {base} pb."
+        "et de trimestre passées, calibré sur ses propres erreurs passées, à "
+        "l'état de rareté actuel : ON RRP {rrp} Md USD, TGA {tga} Md USD, "
+        "écart médian sur 60 jours {base} pb."
     ),
     "turn_month-end": "fin de mois",
     "turn_quarter-end": "fin de trimestre",
@@ -424,9 +426,10 @@ FR: dict[str, object] = {
     "turn_q95": "95e centile",
     "turn_level": "SOFR {v} %",
     "turn_cover": (
-        "Historique hors échantillon sur {n} {kinds} passées : la médiane "
-        "était au-dessus ou au niveau du taux fixé dans {c50} % des cas, le "
-        "90e centile dans {c90} % et le 95e dans {c95} %."
+        "Calibré à l'horizon de {h} jours, le plus proche des {left} jours de "
+        "règlement restants. À cet horizon, sur {n} {kinds} passées, la "
+        "médiane était au-dessus ou au niveau du taux fixé dans {c50} % des "
+        "cas, le 90e centile dans {c90} % et le 95e dans {c95} %."
     ),
     "turn_none": "Plus aucune échéance avant la fin de l'année 2026.",
     "turn_ye": (
