@@ -45,6 +45,32 @@ class TestTurnQuantiles(unittest.TestCase):
         self.assertTrue((m["n_train"] <= m["date"].map(n_before)).all())
 
 
+class TestHorizonCalibration(unittest.TestCase):
+    def test_horizon_state_is_known_on_the_forecast_date(self):
+        t = tq.turn_days(DAILY)
+        d = DAILY.sort_values("date").reset_index(drop=True)
+        for h in tq.HORIZONS:
+            pool = tq.horizon_turns(t, DAILY, h)
+            r = pool.iloc[30]
+            src = d.iloc[int(r["row"]) - h + 1]
+            np.testing.assert_allclose(r[tq.STATE].astype(float), src[tq.STATE].astype(float))
+            # those features use data up to the forecast date only
+            self.assertLess(pd.Timestamp(src["rrp_lag1_date"]), pd.Timestamp(src["date"]))
+            self.assertEqual(r["made_date"], d.at[int(r["row"]) - h, "date"])
+
+    def test_calibration_ignores_turns_not_yet_printed(self):
+        t = tq.turn_days(DAILY)
+        fc = tq.walk_forward_horizon(tq.horizon_turns(t, DAILY, 10), 10)
+        a = tq.calibrate(fc)
+        cut = fc["date"].iloc[25]
+        bumped = fc.copy()
+        bumped.loc[bumped["date"] > cut, "y"] += 300
+        b = tq.calibrate(bumped)
+        keep = a["date"] <= cut
+        np.testing.assert_allclose(a.loc[keep, "q90_cal"], b.loc[keep, "q90_cal"], equal_nan=True)
+        self.assertTrue(a["q90_cal"].iloc[:tq.MIN_CAL].isna().all())
+
+
 class TestAnalogs(unittest.TestCase):
     def test_only_earlier_turns_of_same_type(self):
         as_of = pd.Timestamp("2025-09-30")

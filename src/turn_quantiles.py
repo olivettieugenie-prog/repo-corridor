@@ -36,6 +36,22 @@ data/processed/turn_quantile_scores.csv. It also refits the model on every
 month-end and quarter-end so far and writes the coefficients, in raw units,
 to data/processed/turn_quantile_coefs.csv: the app evaluates them with numpy,
 so it needs no scikit-learn at runtime.
+
+Horizon and calibration
+    The app forecasts turns weeks ahead, so the model is re-scored with the
+    scarcity state taken h settlement days before each turn, h = 1 (the day
+    before, as above), 5, 10 and 15. A forecast made h days ahead is fitted
+    only on turns whose outcome was known by then.
+    Split-conformal calibration then shifts each quantile by the matching
+    empirical quantile of earlier out-of-sample errors (y minus forecast) at
+    the same horizon, using only turns already printed when the forecast is
+    made. It needs 12 earlier errors. A conservative variant uses the
+    finite-sample level ceil((n + 1) tau) / n instead of tau; with 12 to 50
+    errors that pushes the 95th percentile shift to the largest error seen,
+    so it is scored for comparison but not used. Raw and calibrated scores, by type and horizon, go to
+    data/processed/turn_quantile_horizons.csv; the forecasts to
+    turn_quantiles_horizon.csv; the full-sample coefficients and the current
+    calibration shift for each horizon to turn_quantile_coefs_horizon.csv.
 """
 from __future__ import annotations
 
@@ -109,6 +125,100 @@ def predict_coefs(coefs: pd.DataFrame, x: dict) -> list[float]:
     """Evaluate exported coefficients for one turn; no scikit-learn needed."""
     q = [float(r["intercept"] + sum(r[f] * x[f] for f in FEATURES)) for _, r in coefs.iterrows()]
     return list(np.maximum.accumulate(q))
+
+
+HORIZONS = (1, 5, 10, 15)
+MIN_CAL = 12
+
+
+def horizon_turns(t: pd.DataFrame, daily: pd.DataFrame, h: int) -> pd.DataFrame:
+    """Month- and quarter-end turns with the state known h settlement days
+    before: the build_dataset.py features of row (turn - h + 1), which use
+    data up to the end of row (turn - h). made_row is the row the forecast is
+    made on; made_date its date."""
+    d = daily.sort_values("date").reset_index(drop=True)
+    pool = t[t["type"] != "year-end"].copy()
+    src = pool["row"] - h + 1
+    pool = pool[src >= 0]
+    src = src[src >= 0]
+    pool[STATE] = d.loc[src, STATE].to_numpy()
+    pool["made_row"] = pool["row"] - h
+    pool["made_date"] = d.loc[pool["made_row"].clip(lower=0), "date"].to_numpy()
+    return pool.dropna(subset=STATE)
+
+
+def walk_forward_horizon(pool: pd.DataFrame, h: int) -> pd.DataFrame:
+    rows = []
+    for _, r in pool.iterrows():
+        train = pool[pool["row"] <= r["made_row"]]       # printed by the forecast date
+        if len(train) >= MIN_TRAIN:
+            q = fit_quantiles(train, r.to_frame().T)
+            rows.append({"date": r["date"], "type": r["type"], "horizon": h,
+                         "made_date": r["made_date"], "y": r["y"],
+                         **dict(zip(QCOLS, q))})
+    return pd.DataFrame(rows)
+
+
+def conformal_level(n: int, tau: float) -> float:
+    return min(1.0, np.ceil((n + 1) * tau) / n)
+
+
+def calibrate(fc: pd.DataFrame, finite_sample: bool = False, suffix: str = "_cal") -> pd.DataFrame:
+    """Shift each forecast by the quantile of errors on turns printed before it."""
+    fc = fc.sort_values("date").reset_index(drop=True)
+    out = fc.copy()
+    for c in QCOLS:
+        out[c + suffix] = np.nan
+    for i, r in fc.iterrows():
+        past = fc[fc["date"] <= r["made_date"]]
+        if len(past) < MIN_CAL:
+            continue
+        for c, tau in zip(QCOLS, TAUS):
+            e = (past["y"] - past[c]).to_numpy()
+            level = conformal_level(len(e), tau) if finite_sample else tau
+            out.at[i, c + suffix] = r[c] + np.quantile(e, level)
+    cal = [c + suffix for c in QCOLS]
+    ok = out[cal].notna().all(axis=1)
+    out.loc[ok, cal] = np.maximum.accumulate(out.loc[ok, cal].to_numpy(), axis=1)
+    return out
+
+
+def score_horizons(all_fc: pd.DataFrame) -> pd.DataFrame:
+    """Raw and calibrated scores on the turns every horizon has calibrated."""
+    have = all_fc.dropna(subset=["q50_cal"])
+    common = set.intersection(*(set(g["date"]) for _, g in have.groupby("horizon")))
+    f = have[have["date"].isin(common)]
+    rows = []
+    for typ in ("month-end", "quarter-end", "all"):
+        for h, g in f.groupby("horizon"):
+            g = g if typ == "all" else g[g["type"] == typ]
+            for version, suffix in (("raw", ""), ("calibrated", "_cal"),
+                                    ("calibrated, finite-sample", "_fs")):
+                row = {"type": typ, "horizon": h, "version": version, "n": len(g),
+                       "from": g["date"].min().date(), "to": g["date"].max().date()}
+                for c, tau in zip(QCOLS, TAUS):
+                    q = g[c + suffix].to_numpy()
+                    row[f"pinball_{c}"] = pinball(g["y"].to_numpy(), q, tau)
+                    row[f"cover_{c}"] = float((g["y"] <= q).mean())
+                rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def horizon_coefs(t: pd.DataFrame, daily: pd.DataFrame, cal: pd.DataFrame) -> pd.DataFrame:
+    """Full-sample coefficients per horizon, plus today's calibration shift:
+    the conformal quantile of every out-of-sample error at that horizon."""
+    out = []
+    for h in HORIZONS:
+        pool = horizon_turns(t, daily, h)
+        c = final_coefs(pool.assign(type=pool["type"]))
+        g = cal[cal["horizon"] == h]
+        for i, (col, tau) in enumerate(zip(QCOLS, TAUS)):
+            e = (g["y"] - g[col]).to_numpy()
+            c.loc[i, "shift"] = float(np.quantile(e, tau))
+            c.loc[i, "n_errors"] = len(e)
+        c.insert(0, "horizon", h)
+        out.append(c)
+    return pd.concat(out, ignore_index=True)
 
 
 def walk_forward(t: pd.DataFrame) -> pd.DataFrame:
@@ -192,11 +302,24 @@ def main() -> int:
     sc.to_csv(PROC / "turn_quantile_scores.csv", index=False)
     final_coefs(t).to_csv(PROC / "turn_quantile_coefs.csv", index=False)
 
+    hz = pd.concat([calibrate(calibrate(walk_forward_horizon(horizon_turns(t, daily, h), h)),
+                              finite_sample=True, suffix="_fs")
+                    for h in HORIZONS], ignore_index=True)
+    hz.to_csv(PROC / "turn_quantiles_horizon.csv", index=False)
+    hs = score_horizons(hz)
+    hs.to_csv(PROC / "turn_quantile_horizons.csv", index=False)
+    horizon_coefs(t, daily, hz).to_csv(PROC / "turn_quantile_coefs_horizon.csv", index=False)
+
     with pd.option_context("display.width", 220, "display.max_columns", 30):
         print(sc.round(3).to_string(index=False))
     ye = t[t["type"] == "year-end"]
     print(f"\nyear-ends: n = {len(ye)} ({', '.join(str(d.year) for d in ye['date'])}); no model")
-    print(f"wrote {PROC / 'turn_quantiles.csv'} and turn_quantile_scores.csv")
+    with pd.option_context("display.width", 220, "display.max_columns", 30):
+        print("\nby horizon, raw and calibrated:")
+        print(hs.round(3).to_string(index=False))
+    print(f"wrote {PROC / 'turn_quantiles.csv'} and turn_quantile_scores.csv, "
+          "turn_quantiles_horizon.csv, turn_quantile_horizons.csv, "
+          "turn_quantile_coefs_horizon.csv")
     return 0
 
 
