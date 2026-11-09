@@ -102,9 +102,9 @@ EN: dict[str, object] = {
     "calc_end": "End",
     "calc_quote": "Term repo quote, %",
     "calc_central": "Expected roll",
-    "calc_p90": "Stress roll",
+    "calc_p90": "Stress case: every day at p90",
     "calc_be": "Roll minus quote",
-    "calc_be_p90": "Stress minus quote",
+    "calc_be_p90": "Stress case minus quote",
     "calc_term": (
         "Terming out at {q}% is cheaper than the expected roll by {be} bp, and "
         "{be90} bp cheaper than the stress case."
@@ -139,8 +139,9 @@ EN: dict[str, object] = {
         "{n} calendar days over {k} settlement days (turns among them: {t}), act/360 "
         "on both legs. Ordinary days follow the two-stage forecast and its "
         "AR(1) decay; turns use the median and 90th percentile above. The "
-        "stress roll puts every day at its 90th percentile at once, which is "
-        "an upper reference rather than the 90th percentile of the average."
+        "stress case puts every day at its 90th percentile at once, as if "
+        "every day were bad together: an upper reference, not the 90th "
+        "percentile of the average."
     ),
 
     # desk view
@@ -452,9 +453,9 @@ FR: dict[str, object] = {
     "calc_end": "Fin",
     "calc_quote": "Cotation de pension à terme, %",
     "calc_central": "Renouvellement attendu",
-    "calc_p90": "Renouvellement en stress",
+    "calc_p90": "Scénario de stress : chaque jour au 90e centile",
     "calc_be": "Renouvellement moins cotation",
-    "calc_be_p90": "Stress moins cotation",
+    "calc_be_p90": "Scénario de stress moins cotation",
     "calc_term": (
         "Emprunter à terme à {q} % coûte {be} pb de moins que le "
         "renouvellement attendu, et {be90} pb de moins que le scénario de "
@@ -494,9 +495,9 @@ FR: dict[str, object] = {
         "base exact/360 des deux côtés. Les jours ordinaires "
         "suivent la prévision en deux étapes et la décroissance de son AR(1) ; "
         "les échéances utilisent la médiane et le 90e centile ci-dessus. Le "
-        "renouvellement en stress place chaque jour à son 90e centile en même "
-        "temps : c'est une borne de référence plutôt que le 90e centile de la "
-        "moyenne."
+        "scénario de stress place chaque jour à son 90e centile en même temps, "
+        "comme si tous les jours étaient défavorables à la fois : c'est une "
+        "borne de référence, pas le 90e centile de la moyenne."
     ),
 
     "desk_title": "La prévision pour demain",
