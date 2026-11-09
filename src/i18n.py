@@ -146,6 +146,18 @@ EN: dict[str, object] = {
     "slider_format": "MMM YYYY",
     "series_sofr": "SOFR",
     "series_award": "ON RRP award rate",
+    "series_srf": "SRF rate",
+    "ch_srf": "Standing Repo Facility take-up",
+    "ax_srf": "USD bn",
+    "tt_srf": "SRF take-up, bn",
+    "cap_srf": (
+        "The dashed line is the Standing Repo Facility (SRF) rate, from the "
+        "Fed's implementation notes, 43 since July 2021, each linked in "
+        "data/srf_rates.csv: a minimum bid rate until October 2025 and a fixed "
+        "full-allotment rate since December 2025, always at the top of the "
+        "target range. The bars are daily take-up from the New York Fed "
+        "markets API."
+    ),
     "ax_percent": "percent",
     "ax_position": "SOFR over award rate, bp (clipped at {clip})",
     "tt_date": "date",
@@ -397,6 +409,19 @@ FR: dict[str, object] = {
     "slider_format": "MM/YYYY",
     "series_sofr": "SOFR",
     "series_award": "Taux servi ON RRP",
+    "series_srf": "Taux SRF",
+    "ch_srf": "Recours à la facilité permanente de pension",
+    "ax_srf": "Md USD",
+    "tt_srf": "recours à la SRF, Md",
+    "cap_srf": (
+        "La ligne en tirets est le taux de la facilité permanente de prise en "
+        "pension (Standing Repo Facility, SRF), tiré des notes de mise en œuvre "
+        "de la Fed, 43 depuis juillet 2021, chacune référencée dans "
+        "data/srf_rates.csv : un taux minimal de soumission jusqu'en octobre "
+        "2025, puis un taux fixe à allocation intégrale depuis décembre 2025, "
+        "toujours égal au haut de la fourchette cible. Les barres donnent le "
+        "recours quotidien, issu de l'API des marchés de la Fed de New York."
+    ),
     "ax_percent": "en %",
     "ax_position": "SOFR moins taux servi, pb (écrêté à {clip})",
     "tt_date": "date",

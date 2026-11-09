@@ -24,6 +24,8 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
     python src/model_compare.py    # five stage-two models, including trees
     python src/dm_test.py          # Diebold-Mariano test against AR(1)
     python src/intervals.py        # 80% intervals from past errors only
+    python src/turn_quantiles.py   # turn-day quantiles, scored against baselines
+    python src/fetch_srf.py        # Standing Repo Facility take-up, rate check
     python src/backtest_carry.py   # the cash placement rule
     streamlit run app.py           # the app
 

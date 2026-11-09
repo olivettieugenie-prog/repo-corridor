@@ -233,10 +233,17 @@ band = (alt.Chart(d).mark_area(opacity=0.55, color=BAND)
                         scale=alt.Scale(zero=False),
                         axis=alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)),
                 y2="target_hi:Q"))
-rates = d.melt(id_vars="date", value_vars=["sofr", "award_pct"],
+# Standing Repo Facility rate from data/srf_rates.csv, one row per FOMC
+# implementation note since the facility opened on 29 July 2021.
+srf_rates = pd.read_csv(ROOT / "data" / "srf_rates.csv", parse_dates=["effective_date"])
+d = pd.merge_asof(d.sort_values("date"),
+                  srf_rates[["effective_date", "srf_rate_pct"]].rename(
+                      columns={"effective_date": "date"}).sort_values("date"),
+                  on="date", direction="backward")
+rates = d.melt(id_vars="date", value_vars=["sofr", "award_pct", "srf_rate_pct"],
                var_name="series", value_name="pct").dropna()
-SERIES = [T["series_sofr"], T["series_award"]]
-rates["series"] = rates["series"].map(dict(zip(["sofr", "award_pct"], SERIES)))
+SERIES = [T["series_sofr"], T["series_award"], T["series_srf"]]
+rates["series"] = rates["series"].map(dict(zip(["sofr", "award_pct", "srf_rate_pct"], SERIES)))
 # Tooltip values are formatted here rather than by Vega, so they follow the
 # language.
 rates["date_s"] = date_col(rates["date"])
@@ -245,8 +252,11 @@ lines = (alt.Chart(rates).mark_line(strokeWidth=2)
          .encode(x=X_DATE,
                  y=alt.Y("pct:Q", title=T["ax_percent"], scale=alt.Scale(zero=False)),
                  color=alt.Color("series:N", title=None,
-                                 scale=alt.Scale(domain=SERIES, range=[BLUE, ORANGE]),
+                                 scale=alt.Scale(domain=SERIES, range=[BLUE, ORANGE, MUTED]),
                                  legend=alt.Legend(orient="top")),
+                 strokeDash=alt.StrokeDash("series:N", legend=None,
+                                           scale=alt.Scale(domain=SERIES,
+                                                           range=[[1, 0], [1, 0], [5, 3]])),
                  tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
                           alt.Tooltip("series:N", title=T["tt_series"]),
                           alt.Tooltip("pct_s:N", title=T["tt_percent"])]))
@@ -283,7 +293,20 @@ st.altair_chart(style((band + lines).properties(height=340, title=T["ch_band"]))
                 width="stretch")
 st.altair_chart(style((pos + floor).properties(height=320, title=T["ch_position"])),
                 width="stretch")
+# Daily Standing Repo Facility take-up, from src/fetch_srf.py.
+srf = pd.read_csv(PROC / "srf_takeup.csv", parse_dates=["date"])
+srf = srf[(srf["date"] >= start) & (srf["date"] <= end)].copy()
+srf["date_s"] = date_col(srf["date"])
+srf["srf_s"] = fmt_col(srf["srf_bn"], 1)
+take = (alt.Chart(srf).mark_bar(color=RED, width=2)
+        .encode(x=X_DATE,
+                y=alt.Y("srf_bn:Q", title=T["ax_srf"],
+                        axis=alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)),
+                tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
+                         alt.Tooltip("srf_s:N", title=T["tt_srf"])]))
+st.altair_chart(style(take.properties(height=200, title=T["ch_srf"])), width="stretch")
 st.caption(T["cap1"])
+st.caption(T["cap_srf"])
 
 st.divider()
 
