@@ -456,7 +456,7 @@ FR: dict[str, object] = {
     "calc_end": "Fin",
     "calc_quote": "Cotation de pension à terme, %",
     "calc_central": "Renouvellement attendu",
-    "calc_p90": "Scénario de stress : chaque jour au 90e centile",
+    "calc_p90": "Scénario de stress (90e centile)",
     "calc_be": "Renouvellement moins cotation",
     "calc_be_p90": "Scénario de stress moins cotation",
     "calc_term": (
