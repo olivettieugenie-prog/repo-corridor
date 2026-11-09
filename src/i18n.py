@@ -53,6 +53,50 @@ EN: dict[str, object] = {
     "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    # dashboard header, links and market strip
+    "hdr_asof": "Rates to {rates} · balances to {bal} · live forecast run {run} New York time",
+    "hdr_asof_nolive": "Rates to {rates} · balances to {bal} · no live forecast yet",
+    "hdr_delay": (
+        "Data delay: SOFR and EFFR publish the next business day at about 8:00 "
+        "and 9:00 ET, the TGA a day later; the forecast job runs at 14:30 UTC."
+    ),
+    "about_title": "About this page",
+    "nav_label": "Sections",
+    "nav_desk": "Desk",
+    "nav_turns": "Turns",
+    "nav_term_roll": "Term/Roll",
+    "nav_corridor": "Corridor",
+    "nav_calendar": "Calendar",
+    "nav_model": "Model",
+    "nav_carry": "Carry",
+    "nav_method": "Method",
+    "strip_sofr": "SOFR",
+    "strip_effr": "EFFR",
+    "strip_range": "Target range",
+    "strip_award": "ON RRP award rate",
+    "strip_srf_rate": "SRF rate",
+    "strip_rrp": "ON RRP usage",
+    "strip_tga": "TGA",
+    "strip_srf_take": "SRF take-up",
+    "strip_bn": "bn",
+    "strip_tip": "{label}: last observation {date}, change since the previous one",
+    "tt_col_date": "Date",
+    "tt_col_type": "Type",
+    "tt_col_days": "Days",
+    "tt_col_p50": "p50, bp",
+    "tt_col_p90": "p90, bp",
+    "tt_col_p95": "p95, bp",
+    "tt_col_sofr95": "SOFR at p95",
+    "tt_col_cov": "Cov. %",
+    "tt_col_n": "n",
+    "tt_col_h": "Horizon",
+    "turns_ye_cell": "history only",
+    "turns_table_note": (
+        "Calibrated quantiles of SOFR minus the top of the range at the horizon "
+        "closest to the settlement days left; coverage is that horizon's "
+        "walk-forward record (p50/p90/p95) over n past turns."
+    ),
+    "analog_pick": "Analogs for",
     # next turns
     "turns_title": "Next turns",
     "turns_intro": (
@@ -103,7 +147,7 @@ EN: dict[str, object] = {
     "calc_end": "End",
     "calc_quote": "Term repo quote, %",
     "calc_central": "Expected roll",
-    "calc_p90": "Stress case: every day at p90",
+    "calc_p90": "Stress case (p90)",
     "calc_be": "Roll minus quote",
     "calc_be_p90": "Stress case minus quote",
     "calc_term": (
@@ -406,6 +450,50 @@ FR: dict[str, object] = {
     "months": ["janv.", "févr.", "mars", "avr.", "mai", "juin",
                "juil.", "août", "sept.", "oct.", "nov.", "déc."],
     "weekdays": ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."],
+    "hdr_asof": "Taux au {rates} · encours au {bal} · prévision calculée le {run}, heure de New York",
+    "hdr_asof_nolive": "Taux au {rates} · encours au {bal} · pas encore de prévision en conditions réelles",
+    "hdr_delay": (
+        "Délai des données : SOFR et EFFR sont publiés le jour ouvré suivant "
+        "vers 8 h et 9 h (heure de New York), le TGA un jour plus tard ; la "
+        "tâche de prévision tourne à 14 h 30 UTC."
+    ),
+    "about_title": "À propos de cette page",
+    "nav_label": "Sections",
+    "nav_desk": "Desk",
+    "nav_turns": "Échéances",
+    "nav_term_roll": "Terme/JJ",
+    "nav_corridor": "Corridor",
+    "nav_calendar": "Calendrier",
+    "nav_model": "Modèle",
+    "nav_carry": "Portage",
+    "nav_method": "Méthode",
+    "strip_sofr": "SOFR",
+    "strip_effr": "EFFR",
+    "strip_range": "Fourchette cible",
+    "strip_award": "Taux servi ON RRP",
+    "strip_srf_rate": "Taux SRF",
+    "strip_rrp": "Recours ON RRP",
+    "strip_tga": "TGA",
+    "strip_srf_take": "Recours SRF",
+    "strip_bn": "Md",
+    "strip_tip": "{label} : dernière observation le {date}, variation sur la précédente",
+    "tt_col_date": "Date",
+    "tt_col_type": "Type",
+    "tt_col_days": "Jours",
+    "tt_col_p50": "p50, pb",
+    "tt_col_p90": "p90, pb",
+    "tt_col_p95": "p95, pb",
+    "tt_col_sofr95": "SOFR au p95",
+    "tt_col_cov": "Couv. %",
+    "tt_col_n": "n",
+    "tt_col_h": "Horizon",
+    "turns_ye_cell": "historique seul",
+    "turns_table_note": (
+        "Quantiles calibrés de SOFR moins le haut de la fourchette, à l'horizon "
+        "le plus proche des jours de règlement restants ; la couverture est "
+        "l'historique hors échantillon de cet horizon (p50/p90/p95) sur n échéances passées."
+    ),
+    "analog_pick": "Analogues pour",
     "turns_title": "Prochaines échéances",
     "turns_intro": (
         "SOFR moins le haut de la fourchette cible à chaque échéance d'ici la "
@@ -456,9 +544,9 @@ FR: dict[str, object] = {
     "calc_end": "Fin",
     "calc_quote": "Cotation de pension à terme, %",
     "calc_central": "Renouvellement attendu",
-    "calc_p90": "Scénario de stress (90e centile)",
-    "calc_be": "Renouvellement moins cotation",
-    "calc_be_p90": "Scénario de stress moins cotation",
+    "calc_p90": "Stress (90e centile)",
+    "calc_be": "Écart à la cotation",
+    "calc_be_p90": "Écart en stress",
     "calc_term": (
         "Emprunter à terme à {q} % coûte {be} pb de moins que le "
         "renouvellement attendu, et {be90} pb de moins que le scénario de "

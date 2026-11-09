@@ -25,6 +25,7 @@ Run locally:  streamlit run app.py
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -37,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from design import DESIGNS, active_name  # noqa: E402
 from i18n import LANG_NAMES, LANGS, STRINGS, date_short, num  # noqa: E402
 import analogs  # noqa: E402
+import dashboard  # noqa: E402
 import desk  # noqa: E402
 import market_calendar  # noqa: E402
 import roll_cost  # noqa: E402
@@ -85,15 +87,9 @@ def date_col(s: pd.Series) -> pd.Series:
 
 st.set_page_config(page_title=T["page_title"], layout="wide")
 
-st.html(
-    """<style>
-  /* Fonts come from .streamlit/config.toml (theme.font / theme.headingFont),
-     which is the supported route. Only numeral alignment is set here. */
-  [data-testid="stMetricValue"], [data-testid="stTable"], table {
-      font-variant-numeric: tabular-nums;
-  }
-</style>"""
-)
+# One scoped stylesheet (src/style.css) for density, the sticky section links
+# and the market strip; its colours are CSS variables from the active palette.
+st.html(dashboard.stylesheet(C))
 
 
 @st.cache_data
@@ -123,86 +119,97 @@ def r2(y, p, base) -> float:
 
 daily, oos, carry = load()
 
-head, switch = st.columns([5, 1], vertical_alignment="center")
-with switch, st.container(horizontal=True, horizontal_alignment="right"):
-    st.segmented_control(T["lang_label"], LANGS, format_func=LANG_NAMES.get,
-                         key="lang", required=True, label_visibility="collapsed")
-head.title(T["title"])
-st.markdown(T["intro"])
 
-
-# ---------------------------------------------------------------- desk view
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_live(url: str, local: str) -> tuple[pd.DataFrame | None, str]:
     return live_feed.load(url, Path(local))
 
 
-def desk_view() -> pd.Series | None:
-    import os
-    live, source = load_live(os.environ.get("REPO_LIVE_URL", live_feed.RAW_URL),
-                             os.environ.get("REPO_LIVE_LOCAL", str(live_feed.LOCAL)))
-    with st.container(border=True):
-        st.subheader(T["desk_title"])
-        if live is None:
-            st.info(T["desk_none"])
-            return None
-        if source == "local":
-            st.caption(T["desk_src_local"])
-        live = live_feed.latest_per_target(live)
-        row = live.iloc[-1]
-        target = desk.long_date(row["target_date"], LANG)
-        if desk.is_stale(row["target_date"], os.environ.get("REPO_TODAY")):
-            st.warning(T["desk_stale"].format(target=target))
-        if int(row.get("range_unconfirmed", 0) or 0):
-            st.warning(T["desk_unconfirmed"].format(target=target))
-
-        st.markdown(T["desk_target"].format(target=target))
-        k2, k3, k4, k5 = st.columns(4)
-        k2.metric(T["desk_forecast"], f"{n(row['forecast_bp'], 1, sign=True)}\u00a0{BP}")
-        k2.caption(T["desk_range"].format(lo=n(row["lower_bp"], 1, sign=True),
-                                          hi=n(row["upper_bp"], 1, sign=True)))
-        if pd.notna(row.get("implied_sofr_pct")):
-            k3.metric(T["desk_sofr"], f"{n(row['implied_sofr_pct'], 2)}\u00a0%")
-            k3.caption(T["desk_sofr_range"].format(lo=n(row["implied_sofr_lo_pct"], 2),
-                                                   hi=n(row["implied_sofr_hi_pct"], 2)))
-        for col, name, lvl, chg, dt, dec in (
-                (k4, "ON RRP", row["rrp_bn"], row["d_rrp_bn"], row["rrp_date"], 1),
-                (k5, "TGA", row["tga_bn"], row["d_tga_bn"], row["tga_date"], 0)):
-            col.metric(name, T["desk_level"].format(v=n(lvl, dec)),
-                       delta=n(chg, dec, sign=True), delta_color="off",
-                       help=T["desk_level_help"].format(date=desk.long_date(dt, LANG)))
-
-        flags = desk.flags_in_play(row, LANG)
-        st.markdown(T["desk_flags"].format(flags=", ".join(flags) or T["desk_no_flags"]))
-        line1, line2 = desk.morning_note(row, LANG)
-        st.markdown(f"> {line1}  \n> {line2}")
-        st.caption(T["desk_asof"].format(run=desk.run_time_et(row["run_time_utc"], LANG),
-                                         asof=desk.long_date(row["as_of_date"], LANG)))
-        tr = desk.track_record(live)
-        start = desk.long_date(tr["start"], LANG)
-        if "hit" in tr:
-            st.caption(T["desk_track"].format(n=tr["n"], start=start, hit=n(100 * tr["hit"], 0),
-                                              rmse=n(tr["rmse"], 2), rmse_ar1=n(tr["rmse_ar1"], 2)))
-        else:
-            st.caption(T["desk_track_pending"].format(start=start, n=tr["n"]))
-    return row
-
-
-LIVE_ROW = desk_view()
-
-
-# ------------------------------------------------------- next turns, term/roll
 def today() -> pd.Timestamp:
-    import os
     return pd.Timestamp(os.environ.get("REPO_TODAY") or desk.today_et())
 
 
+LIVE, LIVE_SOURCE = load_live(os.environ.get("REPO_LIVE_URL", live_feed.RAW_URL),
+                              os.environ.get("REPO_LIVE_LOCAL", str(live_feed.LOCAL)))
+LIVE = live_feed.latest_per_target(LIVE) if LIVE is not None else None
+LIVE_ROW = LIVE.iloc[-1] if LIVE is not None else None
+SRF_RATES = pd.read_csv(ROOT / "data" / "srf_rates.csv", parse_dates=["effective_date"])
+SRF_TAKE = pd.read_csv(PROC / "srf_takeup.csv", parse_dates=["date"])
+
+# ------------------------------------------------------------------ header
+TILES = dashboard.strip_tiles(daily, LIVE_ROW, SRF_RATES, SRF_TAKE)
+bal_date = max(t["date"] for t in TILES if t["key"] in ("rrp", "tga"))
+head, switch = st.columns([5, 1], vertical_alignment="center")
+with switch, st.container(horizontal=True, horizontal_alignment="right"):
+    st.segmented_control(T["lang_label"], LANGS, format_func=LANG_NAMES.get,
+                         key="lang", required=True, label_visibility="collapsed")
+with head:
+    st.title(T["title"])
+    asof = dict(rates=desk.long_date(daily["date"].max(), LANG),
+                bal=desk.long_date(bal_date, LANG))
+    st.caption(T["hdr_asof"].format(run=desk.run_time_et(LIVE_ROW["run_time_utc"], LANG), **asof)
+               if LIVE_ROW is not None else T["hdr_asof_nolive"].format(**asof))
+    st.caption(T["hdr_delay"])
+st.html(dashboard.navbar(LANG))
+st.html(dashboard.strip_html(TILES, LANG))
+with st.expander(T["about_title"]):
+    st.markdown(T["intro"])
+
+# ---------------------------------------------------------------- desk row
 STATE = roll_cost.build_state(daily, LIVE_ROW, oos)
 # Calibrated turn quantiles, one fit per forecast horizon, and their
 # walk-forward record at each horizon (src/turn_quantiles.py).
 COEFS = pd.read_csv(PROC / "turn_quantile_coefs_horizon.csv")
 TSCORE = (pd.read_csv(PROC / "turn_quantile_horizons.csv")
           .query("version == 'calibrated'").set_index(["type", "horizon"]))
+
+
+def signed_style(v: str) -> str:
+    """Colour for a signed, formatted number; the sign stays in the text."""
+    v = str(v).strip()
+    if v.startswith("+"):
+        return f"color: {C['blue']}"
+    if v.startswith("-") or v.startswith("\u2212"):
+        return f"color: {C['red']}"
+    return ""
+
+
+def desk_panel() -> None:
+    with st.container(border=True):
+        st.subheader(T["desk_title"], anchor="desk")
+        if LIVE_ROW is None:
+            st.info(T["desk_none"])
+            return
+        row = LIVE_ROW
+        if LIVE_SOURCE == "local":
+            st.caption(T["desk_src_local"])
+        target = desk.long_date(row["target_date"], LANG)
+        if desk.is_stale(row["target_date"], os.environ.get("REPO_TODAY")):
+            st.warning(T["desk_stale"].format(target=target))
+        if int(row.get("range_unconfirmed", 0) or 0):
+            st.warning(T["desk_unconfirmed"].format(target=target))
+        st.markdown(T["desk_target"].format(target=target))
+        k1, k2 = st.columns(2)
+        k1.metric(T["desk_forecast"], f"{n(row['forecast_bp'], 1, sign=True)}\u00a0{BP}")
+        k1.caption(T["desk_range"].format(lo=n(row["lower_bp"], 1, sign=True),
+                                          hi=n(row["upper_bp"], 1, sign=True)))
+        if pd.notna(row.get("implied_sofr_pct")):
+            k2.metric(T["desk_sofr"], f"{n(row['implied_sofr_pct'], 2)}\u00a0%")
+            k2.caption(T["desk_sofr_range"].format(lo=n(row["implied_sofr_lo_pct"], 2),
+                                                   hi=n(row["implied_sofr_hi_pct"], 2)))
+        flags = desk.flags_in_play(row, LANG)
+        st.markdown(T["desk_flags"].format(flags=", ".join(flags) or T["desk_no_flags"]))
+        line1, line2 = desk.morning_note(row, LANG)
+        st.markdown(f"> {line1}  \n> {line2}")
+        st.caption(T["desk_asof"].format(run=desk.run_time_et(row["run_time_utc"], LANG),
+                                         asof=desk.long_date(row["as_of_date"], LANG)))
+        tr = desk.track_record(LIVE)
+        start = desk.long_date(tr["start"], LANG)
+        if "hit" in tr:
+            st.caption(T["desk_track"].format(n=tr["n"], start=start, hit=n(100 * tr["hit"], 0),
+                                              rmse=n(tr["rmse"], 2), rmse_ar1=n(tr["rmse_ar1"], 2)))
+        else:
+            st.caption(T["desk_track_pending"].format(start=start, n=tr["n"]))
 
 
 def analog_table(kind: str) -> None:
@@ -216,39 +223,69 @@ def analog_table(kind: str) -> None:
         T["an_print"]: fmt_col(a["printed_bp"], 0, sign=True),
         T["an_p99"]: fmt_col(a["p99_bp"], 0, sign=True),
     })
-    st.dataframe(view, hide_index=True, width="stretch")
+    signed = [T["an_base"], T["an_print"], T["an_p99"]]
+    st.dataframe(view.style.map(signed_style, subset=signed), hide_index=True,
+                 width="stretch", row_height=28)
     st.caption(T["analogs_note"])
 
 
-def next_turns() -> None:
+def turns_table(turns) -> pd.DataFrame:
+    """One row per upcoming turn, numbers formatted for the active language."""
+    rows = []
+    dash = "—"
+    for d, kind in turns:
+        left = roll_cost.days_until(STATE, d)
+        row = {T["tt_col_date"]: date_short(d, LANG), T["tt_col_type"]: T[f"turn_{kind}"],
+               T["tt_col_days"]: str(left)}
+        if kind == "year-end":
+            row.update({T["tt_col_p50"]: dash, T["tt_col_p90"]: dash, T["tt_col_p95"]: dash,
+                        T["tt_col_sofr95"]: dash, T["tt_col_cov"]: T["turns_ye_cell"],
+                        T["tt_col_n"]: str(int((daily["year_end"] == 1).sum()))})
+        else:
+            q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp, left)
+            sc = TSCORE.loc[(kind, q["horizon"])]
+            row.update({
+                T["tt_col_p50"]: n(q["q50"], 1, sign=True),
+                T["tt_col_p90"]: n(q["q90"], 1, sign=True),
+                T["tt_col_p95"]: n(q["q95"], 1, sign=True),
+                T["tt_col_sofr95"]: f"{n(STATE.target_hi + q['q95'] / 100, 2)}\u00a0%",
+                T["tt_col_cov"]: "/".join(n(100 * sc[c], 0) for c in
+                                          ("cover_q50", "cover_q90", "cover_q95")),
+                T["tt_col_n"]: str(int(sc["n"])),
+            })
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def turns_panel() -> None:
     with st.container(border=True):
-        st.subheader(T["turns_title"])
+        st.subheader(T["turns_title"], anchor="turns")
         st.caption(T["turns_intro"].format(rrp=n(STATE.scarcity["rrp_bn_lag1"], 1),
                                            tga=n(STATE.scarcity["tga_bn_lag1"], 0),
                                            base=n(STATE.base_bp, 1, sign=True)))
         turns = roll_cost.upcoming_turns(today(), "2026-12-31")
         if not turns:
             st.info(T["turn_none"])
-        for d, kind in turns:
-            st.markdown(T["turn_head"].format(date=desk.long_date(d, LANG), kind=T[f"turn_{kind}"]))
+            return
+        tab = turns_table(turns)
+        signed = [T["tt_col_p50"], T["tt_col_p90"], T["tt_col_p95"]]
+        widths = {"tt_col_date": 92, "tt_col_type": 84, "tt_col_days": 46, "tt_col_p50": 60,
+                  "tt_col_p90": 60, "tt_col_p95": 60, "tt_col_sofr95": 88, "tt_col_cov": 100,
+                  "tt_col_n": 36}
+        st.dataframe(tab.style.map(signed_style, subset=signed), hide_index=True,
+                     width="stretch", row_height=30,
+                     column_config={T[k]: st.column_config.TextColumn(width=w)
+                                    for k, w in widths.items()})
+        st.caption(T["turns_table_note"])
+        labels = [f"{desk.long_date(d, LANG)} · {T[f'turn_{k}']}" for d, k in turns]
+        with st.expander(T["analogs_title"].format(kinds=T["turns_" + turns[0][1]])
+                         if len(turns) == 1 else T["analog_pick"]):
+            pick = st.selectbox(T["analog_pick"], range(len(turns)), format_func=labels.__getitem__,
+                                key="analog_turn", label_visibility="collapsed")
+            kind = turns[pick][1]
             if kind == "year-end":
-                n_ye = int((daily["year_end"] == 1).sum())
-                st.caption(T["turn_ye"].format(n=n_ye))
-            else:
-                left = roll_cost.days_until(STATE, d)
-                q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp, left)
-                cols = st.columns(3)
-                for col, key in zip(cols, ("q50", "q90", "q95")):
-                    col.metric(T[f"turn_{key}"], f"{n(q[key], 1, sign=True)}\u00a0{BP}")
-                    col.caption(T["turn_level"].format(v=n(STATE.target_hi + q[key] / 100, 2)))
-                sc = TSCORE.loc[(kind, q["horizon"])]
-                st.caption(T["turn_cover"].format(n=int(sc["n"]), kinds=T[f"turns_{kind}"],
-                                                  h=q["horizon"], left=left,
-                                                  c50=n(100 * sc["cover_q50"], 0),
-                                                  c90=n(100 * sc["cover_q90"], 0),
-                                                  c95=n(100 * sc["cover_q95"], 0)))
-            with st.expander(T["analogs_title"].format(kinds=T[f"turns_{kind}"])):
-                analog_table(kind)
+                st.caption(T["turn_ye"].format(n=int((daily["year_end"] == 1).sum())))
+            analog_table(kind)
 
 
 def year_end_block(res: dict) -> None:
@@ -257,10 +294,11 @@ def year_end_block(res: dict) -> None:
     p_ = hist["printed_bp"]
     for d in res["year_end"]:
         st.markdown(f"**{T['calc_ye_title'].format(date=desk.long_date(d, LANG))}**")
-    st.dataframe(pd.DataFrame({T["ye_year"]: hist["date"].dt.year.astype(str),
-                               T["an_date"]: date_col(hist["date"]),
-                               T["ye_print"]: fmt_col(p_, 0, sign=True)}),
-                 hide_index=True, width="stretch")
+    tab = pd.DataFrame({T["ye_year"]: hist["date"].dt.year.astype(str),
+                        T["an_date"]: date_col(hist["date"]),
+                        T["ye_print"]: fmt_col(p_, 0, sign=True)})
+    st.dataframe(tab.style.map(signed_style, subset=[T["ye_print"]]), hide_index=True,
+                 width="stretch", row_height=28)
     st.caption(T["calc_ye_stats"].format(min=n(p_.min(), 0, sign=True),
                                          max=n(p_.max(), 0, sign=True),
                                          med=n(p_.median(), 0, sign=True), n=len(p_)))
@@ -271,17 +309,17 @@ def year_end_block(res: dict) -> None:
         st.caption(T["calc_ye_rest"])
 
 
-def term_or_roll() -> None:
+def calc_panel() -> None:
     first = max(STATE.anchor_date, today())
     first = first if market_calendar.is_business_day(first) else market_calendar.next_business_day(first)
     with st.container(border=True):
-        st.subheader(T["calc_title"])
+        st.subheader(T["calc_title"], anchor="term-roll")
         fmt = "DD/MM/YYYY" if LANG == "fr" else "YYYY/MM/DD"
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         s_ = c1.date_input(T["calc_start"], value=first.date(), format=fmt, key="calc_start")
         e_ = c2.date_input(T["calc_end"], value=(first + pd.Timedelta(days=28)).date(),
                            format=fmt, key="calc_end")
-        q_ = c3.number_input(T["calc_quote"], value=round(STATE.target_hi + STATE.base_bp / 100, 2),
+        q_ = st.number_input(T["calc_quote"], value=round(STATE.target_hi + STATE.base_bp / 100, 2),
                              step=0.01, format="%.2f", key="calc_quote")
         res = roll_cost.price(s_, e_, q_, STATE, COEFS)
         if res["days"].empty:
@@ -296,9 +334,10 @@ def term_or_roll() -> None:
             year_end_block(res)
         if "central_pct" not in res:
             return
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2 = st.columns(2)
         m1.metric(T["calc_central"], f"{n(res['central_pct'], 3)}\u00a0%")
         m2.metric(T["calc_p90"], f"{n(res['p90_pct'], 3)}\u00a0%")
+        m3, m4 = st.columns(2)
         m3.metric(T["calc_be"], f"{n(res['breakeven_bp'], 1, sign=True)}\u00a0{BP}")
         m4.metric(T["calc_be_p90"], f"{n(res['breakeven_p90_bp'], 1, sign=True)}\u00a0{BP}")
         v = roll_cost.verdict(res)
@@ -311,8 +350,14 @@ def term_or_roll() -> None:
                                          t=int(r["kind"].notna().sum())))
 
 
-next_turns()
-term_or_roll()
+# On a phone the three columns stack in this order: desk, turns, calculator.
+col_desk, col_turns, col_calc = st.columns([0.95, 1.9, 1])
+with col_desk:
+    desk_panel()
+with col_turns:
+    turns_panel()
+with col_calc:
+    calc_panel()
 
 # ---------------------------------------------------------------- stat tiles
 usable = carry
@@ -336,7 +381,7 @@ c4.metric(T["tile_peak"], f"{n(peak)}\u00a0{BP}", help=T["tile_peak_help"])
 st.divider()
 
 # ------------------------------------------------------------- the corridor
-st.subheader(T["s1"])
+st.subheader(T["s1"], anchor="corridor")
 lo, hi = daily["date"].min().to_pydatetime(), daily["date"].max().to_pydatetime()
 # A fixed key keeps the chosen range when the language, and so the label,
 # changes.
@@ -439,7 +484,7 @@ st.caption(T["cap_srf"])
 st.divider()
 
 # ------------------------------------------- the regime-dependent month-end
-st.subheader(T["s2"])
+st.subheader(T["s2"], anchor="calendar")
 dd = daily.dropna(subset=["dev_bp"]).copy()
 dd["dev_c"] = dd["dev_bp"].clip(-25, 25)
 prem = (dd.groupby("year")
@@ -477,7 +522,7 @@ st.caption(T["cap2"])
 st.divider()
 
 # -------------------------------------------------------- does the model add
-st.subheader(T["s3"])
+st.subheader(T["s3"], anchor="model")
 o = oos.copy()
 o["year"] = o["date"].dt.year
 sk = (o.groupby("year")
@@ -583,7 +628,7 @@ st.caption(T["cap3b"])
 st.divider()
 
 # ------------------------------------------------------------ is it worth it
-st.subheader(T["s4"])
+st.subheader(T["s4"], anchor="carry")
 st.markdown(T["s4_intro"])
 # None marks the rule's own column, shown as a dash.
 NET = [4.829, 5.030, 5.114, 5.117, 5.132]
@@ -601,4 +646,5 @@ st.dataframe(rules, hide_index=True, width="stretch")
 st.markdown(T["conclusion"])
 
 st.divider()
+st.html('<div id="method"></div>')
 st.caption(T["sources"])

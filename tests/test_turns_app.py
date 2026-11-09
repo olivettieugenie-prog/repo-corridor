@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import desk  # noqa: E402
-from i18n import LANGS, STRINGS  # noqa: E402
+import pandas as pd  # noqa: E402
+from i18n import LANGS, STRINGS, date_short  # noqa: E402
 
 TODAY = "2026-11-09"
 KEYS = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY")
@@ -59,6 +60,14 @@ class TurnsAppTest(unittest.TestCase):
         parts += [m.label for m in at.metric]
         return "\n".join(parts)
 
+    @staticmethod
+    def turns_table(at, T):
+        for df in at.dataframe:
+            v = df.value
+            if T["tt_col_p95"] in getattr(v, "columns", []):
+                return v
+        raise AssertionError("no Next turns table")
+
     def test_panels_in_every_language_and_theme(self):
         for lang in LANGS:
             for theme in ("light", "dark"):
@@ -66,21 +75,33 @@ class TurnsAppTest(unittest.TestCase):
                     T = STRINGS[lang]
                     at = self.run_app(lang, theme)
                     heads = [h.value for h in at.subheader]
-                    self.assertEqual(heads[1:3], [T["turns_title"], T["calc_title"]])
+                    self.assertEqual(heads[:3], [T["desk_title"], T["turns_title"], T["calc_title"]])
+                    tab = self.turns_table(at, T)
+                    self.assertEqual(list(tab[T["tt_col_date"]]),
+                                     [date_short(pd.Timestamp("2026-11-30"), lang),
+                                      date_short(pd.Timestamp("2026-12-31"), lang)])
+                    self.assertEqual(list(tab[T["tt_col_type"]]),
+                                     [T["turn_month-end"], T["turn_year-end"]])
+                    me, ye = tab.iloc[0], tab.iloc[1]
+                    for col in ("tt_col_p50", "tt_col_p90", "tt_col_p95"):
+                        self.assertRegex(me[T[col]], r"^[+-]\d")      # signed number
+                        self.assertEqual(ye[T[col]], "—")
+                    self.assertEqual(ye[T["tt_col_cov"]], T["turns_ye_cell"])
+                    self.assertEqual(ye[T["tt_col_n"]], "8")
                     txt = self.texts(at)
-                    for d, kind in (("2026-11-30", "month-end"), ("2026-12-31", "year-end")):
-                        self.assertIn(T["turn_head"].format(date=desk.long_date(d, lang),
-                                                            kind=T[f"turn_{kind}"]), txt)
-                    for key in ("turn_q50", "turn_q90", "turn_q95", "calc_central", "calc_p90",
-                                "calc_be", "calc_be_p90"):
+                    for key in ("calc_central", "calc_p90", "calc_be", "calc_be_p90"):
                         self.assertIn(T[key], txt)
-                    self.assertIn(T["turn_ye"].format(n=8), txt)
-                    self.assertIn(T["turn_cover"].split("{")[0], txt)
-                    self.assertEqual(len(at.expander), 2)
-                    self.assertGreaterEqual(len(at.dataframe), 3)   # two analog tables, rules
+                    self.assertIn(T["turns_table_note"], txt)
+                    self.assertGreaterEqual(len(at.expander), 2)        # about, analogs
+                    self.assertGreaterEqual(len(at.dataframe), 3)       # turns, analogs, rules
                     verdicts = [T[f"calc_{v}"].split("{")[0] for v in ("term", "insure", "roll")]
                     self.assertTrue(any(v in txt for v in verdicts))
                     self.assertIn(T["calc_note"].split("{")[0], txt)
+
+    def test_analog_picker_switches_turn(self):
+        at = self.run_app()
+        at.selectbox(key="analog_turn").set_value(1).run()     # the year-end
+        self.assertIn(STRINGS["en"]["turn_ye"].format(n=8), self.texts(at))
 
     def test_fomc_window_has_warning_and_no_verdict(self):
         for lang in LANGS:
