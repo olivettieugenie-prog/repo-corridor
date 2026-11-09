@@ -111,6 +111,33 @@ def turn_quantiles(coefs: pd.DataFrame, kind: str, scarcity: dict, base_bp: floa
     return dict(zip(coefs["quantile"], q))
 
 
+def build_state(daily: pd.DataFrame, live_row: pd.Series | None = None,
+                oos: pd.DataFrame | None = None) -> State:
+    """Pricing state from the latest live forecast if there is one, otherwise
+    from the last row of daily.csv (one AR step ahead of its deviation)."""
+    c, phi = ar1_coefs(daily)
+    d = daily.sort_values("date")
+    last = d.iloc[-1]
+    if live_row is not None:
+        return State(anchor_date=pd.Timestamp(live_row["target_date"]),
+                     anchor_dev=float(live_row["forecast_bp"]),
+                     base_bp=float(live_row["base_bp"]),
+                     target_hi=float(live_row["target_hi"]), ar_c=c, ar_phi=phi,
+                     err_q90=float(live_row["upper_bp"] - live_row["forecast_bp"]),
+                     scarcity={"rrp_bn_lag1": float(live_row["rrp_bn"]),
+                               "tga_bn_lag1": float(live_row["tga_bn"])})
+    err_q90 = np.nan
+    if oos is not None:
+        e = (oos["y"] - oos["two_stage"]).dropna().to_numpy()[-250:]
+        err_q90 = float(np.quantile(e, 0.9))
+    rrp = last["rrp_bn_t"] if pd.notna(last["rrp_bn_t"]) else last["rrp_bn_lag1"]
+    return State(anchor_date=next_business_day(last["date"]),
+                 anchor_dev=c + phi * float(np.clip(last["dev_bp"], -WINSOR_BP, WINSOR_BP)),
+                 base_bp=float(d["spread_hi_bp"].iloc[-60:].median()),
+                 target_hi=float(last["target_hi"]), ar_c=c, ar_phi=phi, err_q90=err_q90,
+                 scarcity={"rrp_bn_lag1": float(rrp), "tga_bn_lag1": float(last["tga_bn_lag1"])})
+
+
 # ------------------------------------------------------------------- price
 def day_rates(days: pd.DataFrame, st: State, coefs: pd.DataFrame) -> pd.DataFrame:
     """Central and 90th percentile rate, percent, for every day in the window."""

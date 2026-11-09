@@ -91,6 +91,18 @@ class DeskAppTest(unittest.TestCase):
         return at
 
     @staticmethod
+    def desk_warnings(at) -> list[str]:
+        """Warnings raised by the desk panel only; the calculator further down
+        has its own (an FOMC meeting in its default window, for example).
+        Each desk template is matched on its fixed text before or after the
+        {target} placeholder."""
+        marks = []
+        for lang in LANGS:
+            marks.append(STRINGS[lang]["desk_stale"].split("{")[0])
+            marks.append(STRINGS[lang]["desk_unconfirmed"].split("}", 1)[1][:30])
+        return [w.value for w in at.warning if any(m in w.value for m in marks)]
+
+    @staticmethod
     def texts(at) -> str:
         parts = [m.value for m in at.markdown] + [c.value for c in at.caption]
         parts += [w.value for w in at.warning] + [i.value for i in at.info]
@@ -106,7 +118,7 @@ class DeskAppTest(unittest.TestCase):
                     at = self.run_app(lang, theme)
                     self.assertEqual(at.subheader[0].value, T["desk_title"])
                     txt = self.texts(at)
-                    self.assertEqual(len(at.warning), 0)
+                    self.assertEqual(self.desk_warnings(at), [])
                     line1, line2 = desk.morning_note(
                         make_log(5, 3).iloc[-1].pipe(lambda r: r.set_axis(r.index)), lang)
                     self.assertIn(T["flag_month_end"], txt)
@@ -123,12 +135,12 @@ class DeskAppTest(unittest.TestCase):
                 self.serve(make_log(5, 3), today="2026-12-03", tag=f"stale_{lang}")
                 at = self.run_app(lang)
                 target = desk.long_date(TARGET, lang)
-                self.assertEqual([w.value for w in at.warning],
+                self.assertEqual(self.desk_warnings(at),
                                  [STRINGS[lang]["desk_stale"].format(target=target)])
 
     def test_one_business_day_old_is_not_stale(self):
         self.serve(make_log(5, 3), today="2026-12-01", tag="oneday")
-        self.assertEqual(len(self.run_app().warning), 0)
+        self.assertEqual(self.desk_warnings(self.run_app()), [])
 
     def test_failed_fetch_falls_back_to_local_copy(self):
         for lang in LANGS:
@@ -161,8 +173,9 @@ class DeskAppTest(unittest.TestCase):
     def test_unconfirmed_range_warning(self):
         self.serve(make_log(5, 3, unconfirmed=1), tag="fomc")
         at = self.run_app()
-        self.assertEqual(len(at.warning), 1)
-        self.assertIn("FOMC", at.warning[0].value)
+        w = self.desk_warnings(at)
+        self.assertEqual(len(w), 1)
+        self.assertIn("FOMC", w[0])
 
 
 class DeskLogic(unittest.TestCase):

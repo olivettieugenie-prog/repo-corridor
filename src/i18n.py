@@ -53,6 +53,85 @@ EN: dict[str, object] = {
     "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    # next turns
+    "turns_title": "Next turns",
+    "turns_intro": (
+        "SOFR minus the top of the target range on each turn to year-end, "
+        "from a quantile model of past month-ends and quarter-ends on "
+        "today's scarcity state: ON RRP {rrp} bn, TGA {tga} bn, 60-day median "
+        "spread {base} bp."
+    ),
+    "turn_month-end": "month-end",
+    "turn_quarter-end": "quarter-end",
+    "turn_year-end": "year-end",
+    "turns_month-end": "month-ends",
+    "turns_quarter-end": "quarter-ends",
+    "turns_year-end": "year-ends",
+    "turn_head": "**{date}**, {kind}",
+    "turn_q50": "Median",
+    "turn_q90": "90th percentile",
+    "turn_q95": "95th percentile",
+    "turn_level": "SOFR {v}%",
+    "turn_cover": (
+        "Walk-forward record on {n} past {kinds}: the median was at or above "
+        "the print on {c50}% of them, the 90th percentile on {c90}% and the "
+        "95th on {c95}%."
+    ),
+    "turn_none": "No turn left before year-end 2026.",
+    "turn_ye": (
+        "No model: only {n} year-ends since 2018, too few to fit. The analogs "
+        "below are history only."
+    ),
+    "analogs_title": "Closest past {kinds} by scarcity state",
+    "an_date": "date",
+    "an_rrp": "ON RRP, bn",
+    "an_tga": "TGA, bn",
+    "an_base": "median spread, bp",
+    "an_dist": "distance",
+    "an_print": "printed, bp",
+    "an_p99": "99th pct, bp",
+    "analogs_note": (
+        "Printed is SOFR minus the top of the range that day; 99th pct is the "
+        "99th percentile of that day's SOFR trades, same units. Distance is in "
+        "standard deviations of past daily data."
+    ),
+
+    # term versus roll
+    "calc_title": "Term or roll?",
+    "calc_start": "Start",
+    "calc_end": "End",
+    "calc_quote": "Term repo quote, %",
+    "calc_central": "Expected roll",
+    "calc_p90": "Stress roll",
+    "calc_be": "Roll minus quote",
+    "calc_be_p90": "Stress minus quote",
+    "calc_term": (
+        "Terming out at {q}% is cheaper than the expected roll by {be} bp, and "
+        "{be90} bp cheaper than the stress case."
+    ),
+    "calc_insure": (
+        "Term at {q}% costs {be} bp more than the expected roll but {be90} bp "
+        "less than the stress case: it is insurance against the turn."
+    ),
+    "calc_roll": "Rolling is cheaper even in the stress case, by {be90} bp.",
+    "calc_fomc": (
+        "The window touches the FOMC decision of {dates}. It cannot be priced "
+        "without a policy path, so no verdict is given."
+    ),
+    "calc_ye": (
+        "The window includes the year-end of {dates}, which has no model, so "
+        "no verdict is given. The year-end analogs in Next turns are history "
+        "only."
+    ),
+    "calc_early": "The first day that can be priced is {date}; move the start there or later.",
+    "calc_empty": "The end must come after the start.",
+    "calc_note": (
+        "{n} calendar days over {k} settlement days (turns among them: {t}), act/360 "
+        "on both legs. Ordinary days follow the two-stage forecast and its "
+        "AR(1) decay; turns use the median and 90th percentile above. The "
+        "stress roll puts every day at its 90th percentile at once, which is "
+        "an upper reference rather than the 90th percentile of the average."
+    ),
 
     # desk view
     "desk_title": "Tomorrow's call",
@@ -315,6 +394,89 @@ FR: dict[str, object] = {
     "months": ["janv.", "févr.", "mars", "avr.", "mai", "juin",
                "juil.", "août", "sept.", "oct.", "nov.", "déc."],
     "weekdays": ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."],
+    "turns_title": "Prochaines échéances",
+    "turns_intro": (
+        "SOFR moins le haut de la fourchette cible à chaque échéance d'ici la "
+        "fin d'année, selon un modèle de quantiles estimé sur les fins de mois "
+        "et de trimestre passées, à l'état de rareté actuel : ON RRP {rrp} Md "
+        "USD, TGA {tga} Md USD, écart médian sur 60 jours {base} pb."
+    ),
+    "turn_month-end": "fin de mois",
+    "turn_quarter-end": "fin de trimestre",
+    "turn_year-end": "fin d'année",
+    "turns_month-end": "fins de mois",
+    "turns_quarter-end": "fins de trimestre",
+    "turns_year-end": "fins d'année",
+    "turn_head": "**{date}**, {kind}",
+    "turn_q50": "Médiane",
+    "turn_q90": "90e centile",
+    "turn_q95": "95e centile",
+    "turn_level": "SOFR {v} %",
+    "turn_cover": (
+        "Historique hors échantillon sur {n} {kinds} passées : la médiane "
+        "était au-dessus ou au niveau du taux fixé dans {c50} % des cas, le "
+        "90e centile dans {c90} % et le 95e dans {c95} %."
+    ),
+    "turn_none": "Plus aucune échéance avant la fin de l'année 2026.",
+    "turn_ye": (
+        "Pas de modèle : seulement {n} fins d'année depuis 2018, trop peu pour "
+        "une estimation. Les analogues ci-dessous sont donnés à titre "
+        "historique uniquement."
+    ),
+    "analogs_title": "Analogues historiques les plus proches par état de rareté ({kinds})",
+    "an_date": "date",
+    "an_rrp": "ON RRP, Md",
+    "an_tga": "TGA, Md",
+    "an_base": "écart médian, pb",
+    "an_dist": "distance",
+    "an_print": "fixé, pb",
+    "an_p99": "99e centile, pb",
+    "analogs_note": (
+        "Fixé : SOFR moins le haut de la fourchette ce jour-là ; 99e centile : "
+        "celui des transactions SOFR du jour, dans la même unité. La distance "
+        "est exprimée en écarts-types des données quotidiennes passées."
+    ),
+
+    "calc_title": "Terme ou renouvellement au jour le jour ?",
+    "calc_start": "Début",
+    "calc_end": "Fin",
+    "calc_quote": "Cotation de pension à terme, %",
+    "calc_central": "Renouvellement attendu",
+    "calc_p90": "Renouvellement en stress",
+    "calc_be": "Renouvellement moins cotation",
+    "calc_be_p90": "Stress moins cotation",
+    "calc_term": (
+        "Emprunter à terme à {q} % coûte {be} pb de moins que le "
+        "renouvellement attendu, et {be90} pb de moins que le scénario de "
+        "stress."
+    ),
+    "calc_insure": (
+        "Le terme à {q} % coûte {be} pb de plus que le renouvellement attendu, "
+        "mais {be90} pb de moins que le scénario de stress : c'est une "
+        "assurance contre l'échéance."
+    ),
+    "calc_roll": "Le renouvellement au jour le jour reste moins cher même en stress, de {be90} pb.",
+    "calc_fomc": (
+        "La fenêtre touche la décision du FOMC du {dates}. Elle ne peut pas "
+        "être évaluée sans trajectoire de politique monétaire ; aucune "
+        "conclusion n'est donnée."
+    ),
+    "calc_ye": (
+        "La fenêtre inclut la fin d'année du {dates}, sans modèle ; aucune "
+        "conclusion n'est donnée. Les analogues de fin d'année des prochaines "
+        "échéances sont donnés à titre historique uniquement."
+    ),
+    "calc_early": "Le premier jour évaluable est le {date} ; décaler le début à cette date ou après.",
+    "calc_empty": "La fin doit suivre le début.",
+    "calc_note": (
+        "{n} jours calendaires sur {k} jours de règlement (échéances : {t}), "
+        "base exact/360 des deux côtés. Les jours ordinaires "
+        "suivent la prévision en deux étapes et la décroissance de son AR(1) ; "
+        "les échéances utilisent la médiane et le 90e centile ci-dessus. Le "
+        "renouvellement en stress place chaque jour à son 90e centile en même "
+        "temps : c'est une borne de référence plutôt que le 90e centile de la "
+        "moyenne."
+    ),
 
     "desk_title": "La prévision pour demain",
     "desk_target": "Date cible : **{target}**",

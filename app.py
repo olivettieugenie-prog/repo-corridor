@@ -36,7 +36,10 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from design import DESIGNS, active_name  # noqa: E402
 from i18n import LANG_NAMES, LANGS, STRINGS, date_short, num  # noqa: E402
+import analogs  # noqa: E402
 import desk  # noqa: E402
+import market_calendar  # noqa: E402
+import roll_cost  # noqa: E402
 import live_feed  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
@@ -134,7 +137,7 @@ def load_live(url: str, local: str) -> tuple[pd.DataFrame | None, str]:
     return live_feed.load(url, Path(local))
 
 
-def desk_view() -> None:
+def desk_view() -> pd.Series | None:
     import os
     live, source = load_live(os.environ.get("REPO_LIVE_URL", live_feed.RAW_URL),
                              os.environ.get("REPO_LIVE_LOCAL", str(live_feed.LOCAL)))
@@ -142,7 +145,7 @@ def desk_view() -> None:
         st.subheader(T["desk_title"])
         if live is None:
             st.info(T["desk_none"])
-            return
+            return None
         if source == "local":
             st.caption(T["desk_src_local"])
         live = live_feed.latest_per_target(live)
@@ -182,9 +185,110 @@ def desk_view() -> None:
                                               rmse=n(tr["rmse"], 2), rmse_ar1=n(tr["rmse_ar1"], 2)))
         else:
             st.caption(T["desk_track_pending"].format(start=start, n=tr["n"]))
+    return row
 
 
-desk_view()
+LIVE_ROW = desk_view()
+
+
+# ------------------------------------------------------- next turns, term/roll
+def today() -> pd.Timestamp:
+    import os
+    return pd.Timestamp(os.environ.get("REPO_TODAY") or desk.today_et())
+
+
+STATE = roll_cost.build_state(daily, LIVE_ROW, oos)
+COEFS = pd.read_csv(PROC / "turn_quantile_coefs.csv")
+TSCORE = (pd.read_csv(PROC / "turn_quantile_scores.csv")
+          .query("method == 'model, all turns'").set_index("type"))
+
+
+def analog_table(kind: str) -> None:
+    a = analogs.analogs(daily, {**STATE.scarcity, "base_bp": STATE.base_bp}, kind, today())
+    view = pd.DataFrame({
+        T["an_date"]: date_col(a["date"]),
+        T["an_rrp"]: fmt_col(a["rrp_bn_lag1"], 1),
+        T["an_tga"]: fmt_col(a["tga_bn_lag1"], 0),
+        T["an_base"]: fmt_col(a["base_bp"], 1, sign=True),
+        T["an_dist"]: fmt_col(a["distance"], 2),
+        T["an_print"]: fmt_col(a["printed_bp"], 0, sign=True),
+        T["an_p99"]: fmt_col(a["p99_bp"], 0, sign=True),
+    })
+    st.dataframe(view, hide_index=True, width="stretch")
+    st.caption(T["analogs_note"])
+
+
+def next_turns() -> None:
+    with st.container(border=True):
+        st.subheader(T["turns_title"])
+        st.caption(T["turns_intro"].format(rrp=n(STATE.scarcity["rrp_bn_lag1"], 1),
+                                           tga=n(STATE.scarcity["tga_bn_lag1"], 0),
+                                           base=n(STATE.base_bp, 1, sign=True)))
+        turns = roll_cost.upcoming_turns(today(), "2026-12-31")
+        if not turns:
+            st.info(T["turn_none"])
+        for d, kind in turns:
+            st.markdown(T["turn_head"].format(date=desk.long_date(d, LANG), kind=T[f"turn_{kind}"]))
+            if kind == "year-end":
+                n_ye = int((daily["year_end"] == 1).sum())
+                st.caption(T["turn_ye"].format(n=n_ye))
+            else:
+                q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp)
+                cols = st.columns(3)
+                for col, key in zip(cols, ("q50", "q90", "q95")):
+                    col.metric(T[f"turn_{key}"], f"{n(q[key], 1, sign=True)}\u00a0{BP}")
+                    col.caption(T["turn_level"].format(v=n(STATE.target_hi + q[key] / 100, 2)))
+                sc = TSCORE.loc[kind]
+                st.caption(T["turn_cover"].format(n=int(sc["n"]), kinds=T[f"turns_{kind}"],
+                                                  c50=n(100 * sc["cover_q50"], 0),
+                                                  c90=n(100 * sc["cover_q90"], 0),
+                                                  c95=n(100 * sc["cover_q95"], 0)))
+            with st.expander(T["analogs_title"].format(kinds=T[f"turns_{kind}"])):
+                analog_table(kind)
+
+
+def term_or_roll() -> None:
+    first = max(STATE.anchor_date, today())
+    first = first if market_calendar.is_business_day(first) else market_calendar.next_business_day(first)
+    with st.container(border=True):
+        st.subheader(T["calc_title"])
+        fmt = "DD/MM/YYYY" if LANG == "fr" else "YYYY/MM/DD"
+        c1, c2, c3 = st.columns(3)
+        s_ = c1.date_input(T["calc_start"], value=first.date(), format=fmt, key="calc_start")
+        e_ = c2.date_input(T["calc_end"], value=(first + pd.Timedelta(days=28)).date(),
+                           format=fmt, key="calc_end")
+        q_ = c3.number_input(T["calc_quote"], value=round(STATE.target_hi + STATE.base_bp / 100, 2),
+                             step=0.01, format="%.2f", key="calc_quote")
+        res = roll_cost.price(s_, e_, q_, STATE, COEFS)
+        if res["days"].empty:
+            st.warning(T["calc_empty"])
+            return
+        if res["too_early"]:
+            st.warning(T["calc_early"].format(date=desk.long_date(STATE.anchor_date, LANG)))
+        if res["fomc"]:
+            st.warning(T["calc_fomc"].format(
+                dates=", ".join(desk.long_date(x, LANG) for x in res["fomc"])))
+        if res["year_end"]:
+            st.warning(T["calc_ye"].format(
+                dates=", ".join(desk.long_date(x, LANG) for x in res["year_end"])))
+        if "central_pct" not in res:
+            return
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric(T["calc_central"], f"{n(res['central_pct'], 3)}\u00a0%")
+        m2.metric(T["calc_p90"], f"{n(res['p90_pct'], 3)}\u00a0%")
+        m3.metric(T["calc_be"], f"{n(res['breakeven_bp'], 1, sign=True)}\u00a0{BP}")
+        m4.metric(T["calc_be_p90"], f"{n(res['breakeven_p90_bp'], 1, sign=True)}\u00a0{BP}")
+        v = roll_cost.verdict(res)
+        args = {"q": n(q_, 2), "be": n(abs(res["breakeven_bp"]), 1),
+                "be90": n(abs(res["breakeven_p90_bp"]), 1)}
+        st.markdown(f"**{T['calc_' + v].format(**args)}**")
+        r = res["rates"]
+        st.caption(T["calc_note"].format(n=res["n_days"], k=len(r),
+                                         t=int(r["kind"].notna().sum())))
+
+
+next_turns()
+term_or_roll()
 
 # ---------------------------------------------------------------- stat tiles
 usable = carry
