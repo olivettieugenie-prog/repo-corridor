@@ -111,7 +111,8 @@ class TestAppHeader(unittest.TestCase):
                             htmls = " ".join(h.proto.body for h in at.html)
                             self.assertEqual(htmls.count('class="strip-tile"'), 8)
                             self.assertEqual(re.findall(r'href="#([\w-]+)"', htmls), db.SECTIONS)
-                            self.assertIn('id="method"', htmls)
+                            self.assertEqual([h.proto.anchor for h in at.subheader], db.SECTIONS[:3]
+                                             + ["calendar", "corridor", "model", "carry", "method"])
                             caps = " ".join(c.value for c in at.caption)
                             self.assertIn(STRINGS[lang]["hdr_delay"], caps)
             finally:
