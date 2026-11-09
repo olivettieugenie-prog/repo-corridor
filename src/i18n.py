@@ -118,11 +118,21 @@ EN: dict[str, object] = {
         "The window touches the FOMC decision of {dates}. It cannot be priced "
         "without a policy path, so no verdict is given."
     ),
-    "calc_ye": (
-        "The window includes the year-end of {dates}, which has no model, so "
-        "no verdict is given. The year-end analogs in Next turns are history "
-        "only."
+    "calc_ye_title": "Year-end of {date}: history, not a forecast",
+    "calc_ye_stats": (
+        "Past year-ends printed from {min} to {max} bp over the top of the "
+        "range, median {med} bp ({n} years)."
     ),
+    "calc_ye_be": (
+        "With the year-end's {d} days included, the quote breaks even if the "
+        "year-end prints at {be} bp over the top of the range."
+    ),
+    "calc_ye_rest": (
+        "The figures below price the rest of the window, without the "
+        "year-end; no verdict is given."
+    ),
+    "ye_year": "year",
+    "ye_print": "printed, bp",
     "calc_early": "The first day that can be priced is {date}; move the start there or later.",
     "calc_empty": "The end must come after the start.",
     "calc_note": (
@@ -461,11 +471,22 @@ FR: dict[str, object] = {
         "être évaluée sans trajectoire de politique monétaire ; aucune "
         "conclusion n'est donnée."
     ),
-    "calc_ye": (
-        "La fenêtre inclut la fin d'année du {dates}, sans modèle ; aucune "
-        "conclusion n'est donnée. Les analogues de fin d'année des prochaines "
-        "échéances sont donnés à titre historique uniquement."
+    "calc_ye_title": "Fin d'année du {date} : historique, pas une prévision",
+    "calc_ye_stats": (
+        "Les fins d'année passées se sont fixées entre {min} et {max} pb "
+        "au-dessus du haut de la fourchette, médiane {med} pb ({n} années)."
     ),
+    "calc_ye_be": (
+        "En incluant les {d} jours de la fin d'année, la cotation est à "
+        "l'équilibre si la fin d'année se fixe à {be} pb au-dessus du haut de "
+        "la fourchette."
+    ),
+    "calc_ye_rest": (
+        "Les chiffres ci-dessous évaluent le reste de la fenêtre, hors fin "
+        "d'année ; aucune conclusion n'est donnée."
+    ),
+    "ye_year": "année",
+    "ye_print": "fixé, pb",
     "calc_early": "Le premier jour évaluable est le {date} ; décaler le début à cette date ou après.",
     "calc_empty": "La fin doit suivre le début.",
     "calc_note": (

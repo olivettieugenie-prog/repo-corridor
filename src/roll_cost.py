@@ -16,7 +16,11 @@ Rate on each day, as SOFR = top of range + (base + deviation) / 100:
   month-end and quarter-end
                 the turn quantile model (src/turn_quantiles.py), evaluated
                 from its exported coefficients at the current scarcity state.
-  year-end      no model: the window is not priced.
+  year-end      no model. The rest of the window is priced as usual and the
+                year-end is left out of the average; the result reports
+                the year-end prints of every past year (history, not a
+                forecast) and the print at which the quote would break even
+                once the year-end days are included.
 
 The 90th percentile roll cost puts every day at its own 90th percentile at
 once. That is a stress case rather than the 90th percentile of the average,
@@ -176,21 +180,39 @@ def price(start, end, quote_pct: float, st: State, coefs: pd.DataFrame) -> dict:
         return res
     res["year_end"] = [d for d in days["date"] if turn_kind(d) == "year-end"]
     res["too_early"] = bool(days["date"].min() < st.anchor_date)
-    if res["fomc"] or res["year_end"] or res["too_early"]:
+    if res["fomc"] or res["too_early"]:
         return res
-    r = day_rates(days, st, coefs)
+    is_ye = days["date"].isin(res["year_end"])
+    rest = days[~is_ye]
+    if rest.empty:
+        res["ye_days"] = int(days["days"].sum())
+        res["ye_breakeven_bp"] = (quote_pct - st.target_hi) * 100
+        return res
+    r = day_rates(rest, st, coefs)
     central = weighted_rate(r["central_pct"], r["days"])
     high = weighted_rate(r["p90_pct"], r["days"])
     res.update(rates=r, central_pct=central, p90_pct=high,
                breakeven_bp=(central - quote_pct) * 100,
                breakeven_p90_bp=(high - quote_pct) * 100)
+    if is_ye.any():
+        ye_days = int(days.loc[is_ye, "days"].sum())
+        total = int(days["days"].sum())
+        # Year-end rate that makes the whole-window central roll equal the quote.
+        r_ye = (quote_pct * total - central * int(rest["days"].sum())) / ye_days
+        res.update(ye_days=ye_days, ye_breakeven_bp=(r_ye - st.target_hi) * 100)
     return res
+
+
+def year_end_history(daily: pd.DataFrame) -> pd.DataFrame:
+    """SOFR minus the top of the range on every past year-end in the data."""
+    ye = daily[daily["year_end"] == 1][["date", "spread_hi_bp"]]
+    return ye.rename(columns={"spread_hi_bp": "printed_bp"}).reset_index(drop=True)
 
 
 def verdict(res: dict) -> str | None:
     """'term' if the quote is below the central roll cost, 'insure' if it sits
     between the central and the 90th percentile, 'roll' if above both."""
-    if "central_pct" not in res:
+    if "central_pct" not in res or res["year_end"]:
         return None
     if res["breakeven_bp"] > 0:
         return "term"

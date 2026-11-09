@@ -83,10 +83,24 @@ class TestBlockers(unittest.TestCase):
         self.assertNotIn("central_pct", res)
         self.assertIsNone(rc.verdict(res))
 
-    def test_year_end_not_priced(self):
-        res = rc.price("2026-12-28", "2027-01-08", 3.9, state(anchor_date=pd.Timestamp("2026-12-28")), COEFS)
+    def test_year_end_left_out_and_break_even_print(self):
+        st = state(anchor_date=pd.Timestamp("2026-12-28"))
+        res = rc.price("2026-12-28", "2027-01-08", 3.9, st, COEFS)
         self.assertEqual(res["year_end"], [pd.Timestamp("2026-12-31")])
         self.assertIsNone(rc.verdict(res))
+        # Thu 31 Dec to Mon 4 Jan (1 Jan is a holiday): 4 days at the year-end print
+        self.assertEqual(res["ye_days"], 4)
+        self.assertNotIn(pd.Timestamp("2026-12-31"), set(res["rates"]["date"]))
+        rest_days = int(res["rates"]["days"].sum())
+        self.assertEqual(rest_days + res["ye_days"], res["n_days"])
+        ye_rate = st.target_hi + res["ye_breakeven_bp"] / 100
+        whole = (res["central_pct"] * rest_days + ye_rate * res["ye_days"]) / res["n_days"]
+        self.assertAlmostEqual(whole, 3.9)
+
+    def test_year_end_history(self):
+        h = rc.year_end_history(DAILY)
+        self.assertEqual(len(h), 8)
+        self.assertEqual(h["date"].dt.month.unique().tolist(), [12])
 
     def test_turn_kinds(self):
         self.assertEqual(rc.turn_kind("2026-11-30"), "month-end")

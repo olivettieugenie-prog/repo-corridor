@@ -91,14 +91,19 @@ class TurnsAppTest(unittest.TestCase):
                               [w.value for w in at.warning])
                 self.assertNotIn(T["calc_central"], [m.label for m in at.metric])
 
-    def test_year_end_window_has_warning_and_no_verdict(self):
+    def test_year_end_window_shows_history_and_prices_the_rest(self):
         for lang in LANGS:
             with self.subTest(lang=lang):
                 T = STRINGS[lang]
                 at = self.run_app(lang, window=(date(2026, 12, 28), date(2027, 1, 8)))
-                self.assertIn(T["calc_ye"].format(dates=desk.long_date("2026-12-31", lang)),
-                              [w.value for w in at.warning])
-                self.assertNotIn(T["calc_central"], [m.label for m in at.metric])
+                txt = self.texts(at)
+                self.assertIn(T["calc_ye_title"].format(date=desk.long_date("2026-12-31", lang)), txt)
+                self.assertIn(T["calc_ye_stats"].split("{")[0], txt)
+                self.assertIn(T["calc_ye_rest"], txt)
+                self.assertIn(T["calc_central"], [m.label for m in at.metric])
+                verdicts = [T[f"calc_{v}"].split("{")[0] for v in ("term", "insure", "roll")]
+                self.assertFalse(any(v in txt for v in verdicts))
+                self.assertEqual([w.value for w in at.warning], [])
 
     def test_start_before_first_forecast_day(self):
         at = self.run_app(window=(date(2026, 10, 1), date(2026, 10, 20)))

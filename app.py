@@ -247,6 +247,26 @@ def next_turns() -> None:
                 analog_table(kind)
 
 
+def year_end_block(res: dict) -> None:
+    """Past year-end prints, labelled as history, and the break-even print."""
+    hist = roll_cost.year_end_history(daily)
+    p_ = hist["printed_bp"]
+    for d in res["year_end"]:
+        st.markdown(f"**{T['calc_ye_title'].format(date=desk.long_date(d, LANG))}**")
+    st.dataframe(pd.DataFrame({T["ye_year"]: hist["date"].dt.year.astype(str),
+                               T["an_date"]: date_col(hist["date"]),
+                               T["ye_print"]: fmt_col(p_, 0, sign=True)}),
+                 hide_index=True, width="stretch")
+    st.caption(T["calc_ye_stats"].format(min=n(p_.min(), 0, sign=True),
+                                         max=n(p_.max(), 0, sign=True),
+                                         med=n(p_.median(), 0, sign=True), n=len(p_)))
+    if "ye_breakeven_bp" in res:
+        st.caption(T["calc_ye_be"].format(d=res["ye_days"],
+                                          be=n(res["ye_breakeven_bp"], 0, sign=True)))
+    if "central_pct" in res:
+        st.caption(T["calc_ye_rest"])
+
+
 def term_or_roll() -> None:
     first = max(STATE.anchor_date, today())
     first = first if market_calendar.is_business_day(first) else market_calendar.next_business_day(first)
@@ -268,9 +288,8 @@ def term_or_roll() -> None:
         if res["fomc"]:
             st.warning(T["calc_fomc"].format(
                 dates=", ".join(desk.long_date(x, LANG) for x in res["fomc"])))
-        if res["year_end"]:
-            st.warning(T["calc_ye"].format(
-                dates=", ".join(desk.long_date(x, LANG) for x in res["year_end"])))
+        if res["year_end"] and not res["fomc"] and not res["too_early"]:
+            year_end_block(res)
         if "central_pct" not in res:
             return
         m1, m2, m3, m4 = st.columns(4)
@@ -279,9 +298,10 @@ def term_or_roll() -> None:
         m3.metric(T["calc_be"], f"{n(res['breakeven_bp'], 1, sign=True)}\u00a0{BP}")
         m4.metric(T["calc_be_p90"], f"{n(res['breakeven_p90_bp'], 1, sign=True)}\u00a0{BP}")
         v = roll_cost.verdict(res)
-        args = {"q": n(q_, 2), "be": n(abs(res["breakeven_bp"]), 1),
-                "be90": n(abs(res["breakeven_p90_bp"]), 1)}
-        st.markdown(f"**{T['calc_' + v].format(**args)}**")
+        if v:
+            args = {"q": n(q_, 2), "be": n(abs(res["breakeven_bp"]), 1),
+                    "be90": n(abs(res["breakeven_p90_bp"]), 1)}
+            st.markdown(f"**{T['calc_' + v].format(**args)}**")
         r = res["rates"]
         st.caption(T["calc_note"].format(n=res["n_days"], k=len(r),
                                          t=int(r["kind"].notna().sum())))
