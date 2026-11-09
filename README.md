@@ -1,6 +1,6 @@
 # Repo spread: what drives it, and can it be traded?
 
-Individual project for Machine Learning with R (emlyon, 1BLAML). Due 31 December 2026.
+Individual project for Machine Learning with R (emlyon, 1BLAML).
 
 ## Question
 
@@ -8,9 +8,9 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
 
 ## Plan
 
-1. Data: SOFR (NY Fed) and policy, reserve and Treasury balance series (FRED). Public sources only.
+1. Data: SOFR, EFFR with the target range, ON RRP and Standing Repo Facility operations from the New York Fed; the Treasury General Account from the Treasury's Daily Treasury Statement (Fiscal Data API); administered rates from Federal Reserve implementation notes. Public sources only, no key needed. FRED is optional and skipped when it is unreachable.
 2. Explain: LASSO selects the drivers of the spread. Time-ordered splits, no look-ahead.
-3. Trade idea: a threshold signal built from the model, backtested with costs, reported as it comes, including a weak result.
+3. Use: a cash placement rule backtested with costs, then a desk view for a repo trader: the next day's call, the next turns and a term-versus-roll calculator. Results reported as they come, including weak ones.
 4. Object: a Streamlit app on Streamlit Community Cloud, code in this repository.
 
 ## Run
@@ -67,6 +67,37 @@ So the forecast for D is available only on the morning of D: the model needs SOF
 The desk view at the top of the app shows the latest run: target date, the deviation forecast with its 80% range, the implied SOFR level, the calendar flags in play, ON RRP and TGA with their daily change, and a two-line note filled from a fixed template in `src/i18n.py` (`src/desk.py` holds the logic). The implied level is exact, not approximate: `build_dataset.py` defines the deviation as SOFR minus the top of the target range minus the trailing 60-day median of that spread, all known the day before, so SOFR = top of range + (median + deviation) / 100, which `tests/test_live.py` checks on every day of the data. The panel warns when the forecast targets a day more than one business day back, and shows the hit rate and RMSE against AR(1) once 20 target days have been scored; until then it shows when the live record began.
 
 Business days follow the US government securities settlement calendar in `src/market_calendar.py`. It matches every SOFR publication date since April 2018. Against pandas' `USFederalHolidayCalendar` it adds Good Friday, keeps the Friday before a Saturday New Year's Day or Veterans Day open, starts Juneteenth in 2022, and adds the 5 December 2018 closure.
+
+## Turn quantiles
+
+The desk question is what the next month-end, quarter-end or year-end will cost. `src/turn_quantiles.py` forecasts SOFR minus the top of the target range on turn days at the 50th, 90th and 95th percentiles, with linear quantile regression (scikit-learn `QuantileRegressor`, solver `highs`, no penalty) on a quarter-end flag and past-only scarcity state: lagged ON RRP, lagged TGA and the trailing 60-day median spread. Each turn is forecast walk-forward from a fit on earlier turns only. Year-ends, 8 in the data, get no model.
+
+Against the empirical quantiles of earlier turns of the same type, the model wins at every quantile for both turn types (paired pinball-loss tests, p ≤ 0.05; at most 0.001 except the month-end 95th percentile). Against the pooled 80% interval method mapped to the same quantiles it loses on the month-end median (p = 0.015) and is level otherwise. Fitting on the last 500 days only is worse everywhere. Scores in `data/processed/turn_quantile_scores.csv`.
+
+The app forecasts turns weeks ahead, so the model is re-scored with the state taken 1, 5, 10 and 15 settlement days before each turn, then calibrated by split-conformal shifts: each quantile moves by the matching empirical quantile of earlier out-of-sample errors at the same horizon, using only turns already printed. On the 40 month-ends from October 2021:
+
+| horizon | 90th pct coverage, raw | calibrated | 95th pct coverage, raw | calibrated |
+|---|---|---|---|---|
+| 1 day | 75% | 97.5% | 82.5% | 97.5% |
+| 5 days | 80% | 95% | 87.5% | 97.5% |
+| 10 days | 77.5% | 95% | 85% | 97.5% |
+| 15 days | 72.5% | 90% | 77.5% | 97.5% |
+
+Calibration removes the under-coverage of the upper quantiles, and overshoots a little; pinball loss improves at some horizons and worsens at others, because a wider upper quantile costs loss on calm turns. Quarter-ends (16) were already covered at the upper quantiles. The median stays biased low: even after calibration, month-ends printed above it 52% to 65% of the time, depending on horizon. A finite-sample (n + 1) version of the shift is scored too and is far more conservative. Full table, by type, horizon and version, in `data/processed/turn_quantile_horizons.csv`; coefficients and current shifts per horizon in `turn_quantile_coefs_horizon.csv`.
+
+## Analog table
+
+`src/analogs.py` finds the 8 past turns of the same type whose scarcity state (lagged ON RRP, lagged TGA, trailing median spread) is closest to today's, by Euclidean distance after standardising each variable on data before the query date only. For each it shows what SOFR minus the top of the range printed and the 99th percentile of that day's SOFR trades. Year-ends are included and labelled history only. In the app each upcoming turn expands to its analog table.
+
+## Term-versus-roll calculator
+
+`src/roll_cost.py` prices rolling overnight across a window against a term repo quote. Each settlement day from `src/market_calendar.py` accrues to the next one, so a Friday carries the weekend, act/360 on both legs. Ordinary days follow the two-stage forecast and its AR(1) decay toward the trailing median; month- and quarter-ends use the turn quantiles. The app shows the expected roll, a stress case and the gap to the quote in bp, with a verdict from fixed templates. The stress case puts every day at its own 90th percentile at once, as if every day were bad together, so it is an upper reference rather than the 90th percentile of the average.
+
+A window touching an FOMC decision or its effective day is not priced, because the cost depends on a policy path; meeting dates come from `data/fomc_meetings.csv`, sourced to the Fed's calendar. A window containing a year-end shows every past year-end print with its min, median and max, labelled history, not a forecast, prices the rest of the window, and reports the year-end print at which the quote would break even. `tests/test_roll.py` covers the day count, the averaging, turn days and these cases.
+
+## Standing Repo Facility data
+
+`data/srf_rates.csv` lists the Standing Repo Facility rate from all 43 FOMC implementation notes since the facility opened on 28 July 2021, each with its URL: a minimum bid rate through October 2025 and a fixed full-allotment rate from December 2025, always equal to the top of the target range. `src/fetch_srf.py` checks that equality on every effective date and writes daily take-up from the New York Fed markets API (`/api/rp/results/search.json`, repo operations from 29 July 2021) to `data/processed/srf_takeup.csv`. The API's range query carries no rate, which is why the notes are the source. The corridor chart draws the rate as a dashed line with a take-up panel below.
 
 ## Data
 
@@ -170,7 +201,9 @@ September 2019 is in the data but not in the backtest. The model needs 500 train
 
 ## Status
 
-Data downloaded and verified. Dataset builder, walk-forward LASSO and carry backtest all written and run, with assertions for no look-ahead, award-rate consistency and the carry identity. Next: the Streamlit app and the report.
+Done: data pipeline with no-look-ahead assertions; walk-forward two-stage LASSO with a Diebold-Mariano test against AR(1); carry backtest; 80% prediction intervals; rival specifications and permutation importance; the daily live forecast committed to the `data` branch by GitHub Actions; and the Streamlit app in English and French with the desk view, next turns, the term-versus-roll calculator and the Standing Repo Facility. The test suite runs the app through AppTest in both languages and themes.
+
+Next: the written report (1 to 3 pages, per the project specification).
 
 ## The administered-rate table
 
