@@ -53,6 +53,122 @@ EN: dict[str, object] = {
     "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    # dashboard step 2: short captions, tables, method, footer
+    "turns_state": (
+        "State: ON RRP {rrp} bn, TGA {tga} bn, 60-day median {base} bp. "
+        "Calibrated quantiles at the horizon closest to the days left."
+    ),
+    "calc_note_short": (
+        "{n} days, {k} settlement days, {t} turns; act/360; the stress case "
+        "puts every day at its 90th percentile at once."
+    ),
+    "cap_short_calendar": (
+        "SOFR minus the top of the range on each month-end, bp; Q quarter-end, "
+        "Y year-end. Right: the next 40 settlement days on the forecast path."
+    ),
+    "ch_turnmap": "Month-end prints, bp over the top of the range",
+    "ch_next40": "Next 40 settlement days, forecast bp",
+    "tt_month": "month",
+    "tt_value": "bp over top",
+    "tt_mark": "turn",
+    "next40_ye": "year-end: no model",
+    "cap_short_corridor": (
+        "Daily: rates in the corridor, SOFR's position above the facility "
+        "floor, ON RRP usage and SRF take-up."
+    ),
+    "ch_rrp_daily": "ON RRP usage, daily",
+    "cap_short_model": "All scores are out of sample and walk-forward; method notes are at the bottom.",
+    "cap_short_carry": (
+        "The whole opportunity is 0.303 bp a year; a rule with no model takes "
+        "two thirds and the LASSO adds 0.003 bp over AR(1). The corridor is too "
+        "tight for the overnight choice to carry money."
+    ),
+    "tb_r2": "R² against AR(1) by year",
+    "tb_dm": "Diebold-Mariano test against AR(1)",
+    "tb_cov": "80% interval coverage",
+    "tb_turns": "Turn quantiles, raw and calibrated",
+    "tb_rival": "Rival stage-two specifications",
+    "c_year": "year",
+    "c_period": "period",
+    "c_group": "group",
+    "c_n": "n",
+    "c_r2": "R² vs AR(1)",
+    "c_rmse": "RMSE, bp",
+    "c_rmse_ar1": "RMSE AR(1), bp",
+    "c_hln": "DM (HLN)",
+    "c_p": "p, two-sided",
+    "c_cover": "coverage",
+    "c_below": "below",
+    "c_above": "above",
+    "c_width": "width, bp",
+    "c_type": "type",
+    "c_h": "horizon",
+    "c_version": "version",
+    "c_cov3": "coverage p50/p90/p95",
+    "c_pin90": "pinball p90",
+    "c_model": "stage-two model",
+    "c_r2_all": "R², all",
+    "c_r2_24": "R², 2024+",
+    "v_raw": "raw",
+    "v_cal": "calibrated",
+    "g_all": "all",
+    "g_me": "month-ends",
+    "g_other": "other days",
+    "g_qe": "quarter-ends",
+    "g_me24": "month-ends, 2024+",
+    "g_other24": "other days, 2024+",
+    "p_undefined": "undefined",
+    "method_title": "Method",
+    "m_turns": "Next turns and term versus roll",
+    "m_corridor": "Corridor and administered rates",
+    "m_calendar": "Calendar pressure",
+    "m_model": "Model, significance and intervals",
+    "m_importance": "What the model uses",
+    "m_carry": "The carry rule",
+    "m_timing": "Data sources and publication timing",
+    "timing_table": (
+        "| series | source | published | used as |\n"
+        "|---|---|---|---|\n"
+        "| SOFR, percentiles, volume | NY Fed | about 8:00 a.m. ET next business day, revisable about 2:30 p.m. | day t |\n"
+        "| EFFR and target range | NY Fed | about 9:00 a.m. ET next business day | day t |\n"
+        "| ON RRP take-up and award rate | NY Fed | same day, after the 1:15 p.m. ET close | t − 1 |\n"
+        "| SRF take-up | NY Fed | same day, after each operation | display only |\n"
+        "| TGA closing balance | Daily Treasury Statement | 4:00 p.m. ET next business day | t − 1 |\n"
+        "| Administered rates, SRF rate | FOMC implementation notes | 2:00 p.m. ET on decision day, effective next day | table |"
+    ),
+    "timing_note": (
+        "The forecast for day D therefore exists only on the morning of D, once "
+        "SOFR for D − 1 is out: it is a same-day nowcast, not a call made the "
+        "evening before."
+    ),
+    "footer_sources": (
+        "Sources: [NY Fed markets API](https://markets.newyorkfed.org/static/docs/markets-api.html) "
+        "(SOFR, EFFR, ON RRP, SRF) · [Daily Treasury Statement]"
+        "(https://fiscaldata.treasury.gov/datasets/daily-treasury-statement/) (TGA) · "
+        "[FOMC implementation notes and calendar](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm) "
+        "· code and data: [github.com/olivettieugenie-prog/repo-corridor]"
+        "(https://github.com/olivettieugenie-prog/repo-corridor)"
+    ),
+    "dl_title": "Download the tables as CSV",
+    "dl_strip": "Market strip",
+    "dl_turns": "Next turns",
+    "dl_analogs": "Analogs",
+    "dl_ye": "Past year-ends",
+    "dl_r2": "R² by year",
+    "dl_dm": "Diebold-Mariano",
+    "dl_cov": "Interval coverage",
+    "dl_turnscores": "Turn quantile scores",
+    "dl_rival": "Rival specifications",
+    "dl_importance": "Permutation importance",
+    "dl_rules": "Carry rules",
+    "dl_next40": "Next 40 days path",
+    "rivals": {
+        "linear, main effects": "linear, main effects",
+        "linear + interactions": "linear + interactions",
+        "ridge + interactions": "ridge + interactions",
+        "random forest": "random forest",
+        "gradient boosting": "gradient boosting",
+    },
     # dashboard header, links and market strip
     "hdr_asof": "Rates to {rates} · balances to {bal} · live forecast run {run} New York time",
     "hdr_asof_nolive": "Rates to {rates} · balances to {bal} · no live forecast yet",
@@ -276,7 +392,7 @@ EN: dict[str, object] = {
     ),
 
     # 1. corridor
-    "s1": "1. The corridor",
+    "s1": "The corridor",
     "date_range": "Date range",
     "slider_format": "MMM YYYY",
     "series_sofr": "SOFR",
@@ -294,7 +410,7 @@ EN: dict[str, object] = {
         "markets API."
     ),
     "ax_percent": "percent",
-    "ax_position": "SOFR over award rate, bp (clipped at {clip})",
+    "ax_position": "SOFR − award, bp (clip {clip})",
     "tt_date": "date",
     "tt_series": "series",
     "tt_percent": "percent",
@@ -311,7 +427,7 @@ EN: dict[str, object] = {
     ),
 
     # 2. calendar
-    "s2": "2. Calendar pressure only bites when reserves are scarce",
+    "s2": "Calendar pressure only bites when reserves are scarce",
     "ax_bp": "basis points",
     "ax_rrp": "USD bn, daily average",
     "tt_year": "year",
@@ -328,7 +444,7 @@ EN: dict[str, object] = {
     ),
 
     # 3. skill
-    "s3": "3. Does the model add anything to an autoregression?",
+    "s3": "Does the model add anything to an autoregression?",
     "ax_r2": "out-of-sample R² vs AR(1)",
     "tt_r2": "R² vs AR(1)",
     "ch_r2": "Positive means the LASSO beat the autoregression",
@@ -364,7 +480,7 @@ EN: dict[str, object] = {
     ),
 
     # 3b. importance
-    "s3b": "3b. What is the model actually using?",
+    "s3b": "What is the model actually using?",
     "kind_one": "one at a time",
     "kind_group": "shuffled as a group",
     "ax_rmse": "increase in out-of-sample RMSE, bp",
@@ -394,7 +510,7 @@ EN: dict[str, object] = {
     ),
 
     # 4. money
-    "s4": "4. Is the skill worth any money? No",
+    "s4": "Is the skill worth any money? No",
     "s4_intro": (
         "Place tomorrow's overnight cash in repo at SOFR or at the facility at "
         "the award rate, decided the day before. The carry splits exactly into "
@@ -450,6 +566,122 @@ FR: dict[str, object] = {
     "months": ["janv.", "févr.", "mars", "avr.", "mai", "juin",
                "juil.", "août", "sept.", "oct.", "nov.", "déc."],
     "weekdays": ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."],
+    "turns_state": (
+        "État : ON RRP {rrp} Md, TGA {tga} Md, médiane sur 60 jours {base} pb. "
+        "Quantiles calibrés à l'horizon le plus proche des jours restants."
+    ),
+    "calc_note_short": (
+        "{n} jours, {k} jours de règlement, {t} échéances ; exact/360 ; le "
+        "stress place chaque jour à son 90e centile en même temps."
+    ),
+    "cap_short_calendar": (
+        "SOFR moins le haut de la fourchette à chaque fin de mois, en pb ; Q fin "
+        "de trimestre, Y fin d'année. À droite : les 40 prochains jours de "
+        "règlement selon la prévision."
+    ),
+    "ch_turnmap": "Fins de mois, pb au-dessus du haut de la fourchette",
+    "ch_next40": "40 prochains jours de règlement, prévision en pb",
+    "tt_month": "mois",
+    "tt_value": "pb vs haut",
+    "tt_mark": "échéance",
+    "next40_ye": "fin d'année : pas de modèle",
+    "cap_short_corridor": (
+        "Quotidien : taux dans le corridor, position du SOFR au-dessus du "
+        "plancher, recours à l'ON RRP et à la SRF."
+    ),
+    "ch_rrp_daily": "Recours à l'ON RRP, quotidien",
+    "cap_short_model": "Tous les scores sont hors échantillon et glissants ; les notes de méthode figurent en bas de page.",
+    "cap_short_carry": (
+        "L'opportunité totale est de 0,303 pb par an ; une règle sans modèle en "
+        "capte les deux tiers et le LASSO ajoute 0,003 pb à l'AR(1). Le corridor "
+        "est trop étroit pour que le choix au jour le jour rapporte."
+    ),
+    "tb_r2": "R² face à l'AR(1) par année",
+    "tb_dm": "Test de Diebold-Mariano face à l'AR(1)",
+    "tb_cov": "Couverture de l'intervalle à 80 %",
+    "tb_turns": "Quantiles d'échéance, bruts et calibrés",
+    "tb_rival": "Spécifications concurrentes de la deuxième étape",
+    "c_year": "année",
+    "c_period": "période",
+    "c_group": "groupe",
+    "c_n": "n",
+    "c_r2": "R² face à l'AR(1)",
+    "c_rmse": "RMSE, pb",
+    "c_rmse_ar1": "RMSE AR(1), pb",
+    "c_hln": "DM (HLN)",
+    "c_p": "p, bilatéral",
+    "c_cover": "couverture",
+    "c_below": "en dessous",
+    "c_above": "au-dessus",
+    "c_width": "largeur, pb",
+    "c_type": "type",
+    "c_h": "horizon",
+    "c_version": "version",
+    "c_cov3": "couverture p50/p90/p95",
+    "c_pin90": "perte pinball p90",
+    "c_model": "modèle de deuxième étape",
+    "c_r2_all": "R², ensemble",
+    "c_r2_24": "R², 2024+",
+    "v_raw": "brut",
+    "v_cal": "calibré",
+    "g_all": "ensemble",
+    "g_me": "fins de mois",
+    "g_other": "autres jours",
+    "g_qe": "fins de trimestre",
+    "g_me24": "fins de mois, 2024+",
+    "g_other24": "autres jours, 2024+",
+    "p_undefined": "non défini",
+    "method_title": "Méthode",
+    "m_turns": "Prochaines échéances et terme ou renouvellement",
+    "m_corridor": "Corridor et taux administrés",
+    "m_calendar": "Effets de calendrier",
+    "m_model": "Modèle, significativité et intervalles",
+    "m_importance": "Ce qu'utilise le modèle",
+    "m_carry": "La règle de portage",
+    "m_timing": "Sources et horaires de publication",
+    "timing_table": (
+        "| série | source | publication | utilisée comme |\n"
+        "|---|---|---|---|\n"
+        "| SOFR, centiles, volume | Fed de New York | vers 8 h (New York) le jour ouvré suivant, révisable vers 14 h 30 | jour t |\n"
+        "| EFFR et fourchette cible | Fed de New York | vers 9 h (New York) le jour ouvré suivant | jour t |\n"
+        "| Recours et taux servi ON RRP | Fed de New York | le jour même, après la clôture de 13 h 15 | t − 1 |\n"
+        "| Recours à la SRF | Fed de New York | le jour même, après chaque opération | affichage seul |\n"
+        "| Solde de clôture du TGA | Daily Treasury Statement | 16 h (New York) le jour ouvré suivant | t − 1 |\n"
+        "| Taux administrés, taux SRF | notes de mise en œuvre du FOMC | 14 h le jour de la décision, effectif le lendemain | tableau |"
+    ),
+    "timing_note": (
+        "La prévision du jour D n'existe donc que le matin de D, une fois le "
+        "SOFR de D − 1 publié : c'est une estimation du jour même, pas une "
+        "décision prise la veille au soir."
+    ),
+    "footer_sources": (
+        "Sources : [API des marchés de la Fed de New York](https://markets.newyorkfed.org/static/docs/markets-api.html) "
+        "(SOFR, EFFR, ON RRP, SRF) · [Daily Treasury Statement]"
+        "(https://fiscaldata.treasury.gov/datasets/daily-treasury-statement/) (TGA) · "
+        "[notes de mise en œuvre et calendrier du FOMC](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm) "
+        "· code et données : [github.com/olivettieugenie-prog/repo-corridor]"
+        "(https://github.com/olivettieugenie-prog/repo-corridor)"
+    ),
+    "dl_title": "Télécharger les tableaux en CSV",
+    "dl_strip": "Bandeau de marché",
+    "dl_turns": "Prochaines échéances",
+    "dl_analogs": "Analogues",
+    "dl_ye": "Fins d'année passées",
+    "dl_r2": "R² par année",
+    "dl_dm": "Diebold-Mariano",
+    "dl_cov": "Couverture de l'intervalle",
+    "dl_turnscores": "Scores des quantiles d'échéance",
+    "dl_rival": "Spécifications concurrentes",
+    "dl_importance": "Importance par permutation",
+    "dl_rules": "Règles de portage",
+    "dl_next40": "Trajectoire des 40 jours",
+    "rivals": {
+        "linear, main effects": "linéaire, effets principaux",
+        "linear + interactions": "linéaire + interactions",
+        "ridge + interactions": "ridge + interactions",
+        "random forest": "forêt aléatoire",
+        "gradient boosting": "gradient boosting",
+    },
     "hdr_asof": "Taux au {rates} · encours au {bal} · prévision calculée le {run}, heure de New York",
     "hdr_asof_nolive": "Taux au {rates} · encours au {bal} · pas encore de prévision en conditions réelles",
     "hdr_delay": (
@@ -679,7 +911,7 @@ FR: dict[str, object] = {
         "habituelle va d'environ -10 à +30 pb."
     ),
 
-    "s1": "1. Le corridor",
+    "s1": "Le corridor",
     "date_range": "Période",
     "slider_format": "MM/YYYY",
     "series_sofr": "SOFR",
@@ -698,7 +930,7 @@ FR: dict[str, object] = {
         "recours quotidien, issu de l'API des marchés de la Fed de New York."
     ),
     "ax_percent": "en %",
-    "ax_position": "SOFR moins taux servi, pb (écrêté à {clip})",
+    "ax_position": "SOFR − taux servi, pb (écrêté {clip})",
     "tt_date": "date",
     "tt_series": "série",
     "tt_percent": "en %",
@@ -715,7 +947,7 @@ FR: dict[str, object] = {
         "491 taux servis observés directement."
     ),
 
-    "s2": "2. Les effets de calendrier ne jouent que lorsque les réserves sont rares",
+    "s2": "Les effets de calendrier ne jouent que lorsque les réserves sont rares",
     "ax_bp": "points de base",
     "ax_rrp": "Md USD, moyenne quotidienne",
     "tt_year": "année",
@@ -732,7 +964,7 @@ FR: dict[str, object] = {
         "contraintes de bilan de fin de mois n'avaient aucune prise."
     ),
 
-    "s3": "3. Le modèle apporte-t-il quelque chose à un modèle autorégressif ?",
+    "s3": "Le modèle apporte-t-il quelque chose à un modèle autorégressif ?",
     "ax_r2": "R² hors échantillon face à l'AR(1)",
     "tt_r2": "R² face à l'AR(1)",
     "ch_r2": "Valeur positive : le LASSO bat l'AR(1)",
@@ -768,7 +1000,7 @@ FR: dict[str, object] = {
         "2020 (p = {pall}) : les pertes de 2020 compensent les gains ultérieurs."
     ),
 
-    "s3b": "3b. Sur quoi le modèle s'appuie-t-il réellement ?",
+    "s3b": "Sur quoi le modèle s'appuie-t-il réellement ?",
     "kind_one": "un par un",
     "kind_group": "permutés en bloc",
     "ax_rmse": "hausse de la RMSE, pb",
@@ -797,7 +1029,7 @@ FR: dict[str, object] = {
         "bruit."
     ),
 
-    "s4": "4. Cette capacité prédictive a-t-elle une valeur économique ? Non",
+    "s4": "Cette capacité prédictive a-t-elle une valeur économique ? Non",
     "s4_intro": (
         "La trésorerie au jour le jour du lendemain est placée soit en repo au "
         "SOFR, soit auprès de la facilité au taux servi, sur décision prise la "

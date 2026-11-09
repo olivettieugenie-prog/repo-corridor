@@ -106,10 +106,10 @@ def style(chart: alt.Chart) -> alt.Chart:
             .configure(background="transparent")
             .configure_axis(labelFont=FONT, titleFont=FONT, labelColor=MUTED,
                             titleColor=MUTED, gridColor=GRID, domainColor=GRID,
-                            tickColor=GRID, labelFontSize=12, titleFontSize=12)
+                            tickColor=GRID, labelFontSize=11, titleFontSize=11)
             .configure_legend(labelFont=FONT, titleFont=FONT, labelColor=INK,
-                              titleColor=MUTED, labelFontSize=12, titleFontSize=12)
-            .configure_title(font=FONT, color=INK, fontSize=14, anchor="start"))
+                              titleColor=MUTED, labelFontSize=11, titleFontSize=11)
+            .configure_title(font=FONT, color=INK, fontSize=12, anchor="start"))
 
 
 def r2(y, p, base) -> float:
@@ -152,8 +152,6 @@ with head:
     st.caption(T["hdr_delay"])
 st.html(dashboard.navbar(LANG))
 st.html(dashboard.strip_html(TILES, LANG))
-with st.expander(T["about_title"]):
-    st.markdown(T["intro"])
 
 # ---------------------------------------------------------------- desk row
 STATE = roll_cost.build_state(daily, LIVE_ROW, oos)
@@ -172,6 +170,22 @@ def signed_style(v: str) -> str:
     if v.startswith("-") or v.startswith("\u2212"):
         return f"color: {C['red']}"
     return ""
+
+
+# Every table on the page goes through show_table, which renders the formatted
+# view and registers the raw numbers for the CSV downloads in the footer.
+TABLES: dict[str, pd.DataFrame] = {"dl_strip": pd.DataFrame(
+    [{"series": t["key"], "value": (f"{t['value'][0]}-{t['value'][1]}" if t["kind"] == "range"
+                                    else t["value"]),
+      "change": t["change"], "unit_change": "bn" if t["kind"] == "bn" else "bp",
+      "date": pd.Timestamp(t["date"]).date()} for t in TILES])}
+
+
+def show_table(key: str, view: pd.DataFrame, raw: pd.DataFrame, signed=(), **kw) -> None:
+    TABLES[key] = raw
+    styled = view.style.map(signed_style, subset=list(signed)) if signed else view
+    st.dataframe(styled, hide_index=True, width="stretch", row_height=kw.pop("row_height", 28),
+                 **kw)
 
 
 def desk_panel() -> None:
@@ -223,27 +237,31 @@ def analog_table(kind: str) -> None:
         T["an_print"]: fmt_col(a["printed_bp"], 0, sign=True),
         T["an_p99"]: fmt_col(a["p99_bp"], 0, sign=True),
     })
-    signed = [T["an_base"], T["an_print"], T["an_p99"]]
-    st.dataframe(view.style.map(signed_style, subset=signed), hide_index=True,
-                 width="stretch", row_height=28)
-    st.caption(T["analogs_note"])
+    show_table("dl_analogs", view, a, signed=[T["an_base"], T["an_print"], T["an_p99"]])
 
 
 def turns_table(turns) -> pd.DataFrame:
-    """One row per upcoming turn, numbers formatted for the active language."""
-    rows = []
+    """One row per upcoming turn, numbers formatted for the active language;
+    the raw numbers go to TABLES for the CSV download."""
+    rows, raw = [], []
     dash = "—"
     for d, kind in turns:
         left = roll_cost.days_until(STATE, d)
         row = {T["tt_col_date"]: date_short(d, LANG), T["tt_col_type"]: T[f"turn_{kind}"],
                T["tt_col_days"]: str(left)}
+        r = {"date": pd.Timestamp(d).date(), "type": kind, "days_left": left}
         if kind == "year-end":
+            r.update(note="no model, history only")
             row.update({T["tt_col_p50"]: dash, T["tt_col_p90"]: dash, T["tt_col_p95"]: dash,
                         T["tt_col_sofr95"]: dash, T["tt_col_cov"]: T["turns_ye_cell"],
                         T["tt_col_n"]: str(int((daily["year_end"] == 1).sum()))})
         else:
             q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp, left)
             sc = TSCORE.loc[(kind, q["horizon"])]
+            r.update(horizon=q["horizon"], q50_bp=q["q50"], q90_bp=q["q90"], q95_bp=q["q95"],
+                     sofr_at_q95_pct=STATE.target_hi + q["q95"] / 100,
+                     cover_q50=sc["cover_q50"], cover_q90=sc["cover_q90"],
+                     cover_q95=sc["cover_q95"], n=int(sc["n"]))
             row.update({
                 T["tt_col_p50"]: n(q["q50"], 1, sign=True),
                 T["tt_col_p90"]: n(q["q90"], 1, sign=True),
@@ -254,29 +272,29 @@ def turns_table(turns) -> pd.DataFrame:
                 T["tt_col_n"]: str(int(sc["n"])),
             })
         rows.append(row)
+        raw.append(r)
+    TABLES["dl_turns"] = pd.DataFrame(raw)
     return pd.DataFrame(rows)
 
 
 def turns_panel() -> None:
     with st.container(border=True):
         st.subheader(T["turns_title"], anchor="turns")
-        st.caption(T["turns_intro"].format(rrp=n(STATE.scarcity["rrp_bn_lag1"], 1),
-                                           tga=n(STATE.scarcity["tga_bn_lag1"], 0),
-                                           base=n(STATE.base_bp, 1, sign=True)))
         turns = roll_cost.upcoming_turns(today(), "2026-12-31")
         if not turns:
             st.info(T["turn_none"])
             return
         tab = turns_table(turns)
-        signed = [T["tt_col_p50"], T["tt_col_p90"], T["tt_col_p95"]]
         widths = {"tt_col_date": 92, "tt_col_type": 84, "tt_col_days": 46, "tt_col_p50": 60,
                   "tt_col_p90": 60, "tt_col_p95": 60, "tt_col_sofr95": 88, "tt_col_cov": 100,
                   "tt_col_n": 36}
-        st.dataframe(tab.style.map(signed_style, subset=signed), hide_index=True,
-                     width="stretch", row_height=30,
-                     column_config={T[k]: st.column_config.TextColumn(width=w)
-                                    for k, w in widths.items()})
-        st.caption(T["turns_table_note"])
+        show_table("dl_turns", tab, TABLES["dl_turns"],
+                   signed=[T["tt_col_p50"], T["tt_col_p90"], T["tt_col_p95"]], row_height=30,
+                   column_config={T[k]: st.column_config.TextColumn(width=w)
+                                  for k, w in widths.items()})
+        st.caption(T["turns_state"].format(rrp=n(STATE.scarcity["rrp_bn_lag1"], 1),
+                                           tga=n(STATE.scarcity["tga_bn_lag1"], 0),
+                                           base=n(STATE.base_bp, 1, sign=True)))
         labels = [f"{desk.long_date(d, LANG)} · {T[f'turn_{k}']}" for d, k in turns]
         with st.expander(T["analogs_title"].format(kinds=T["turns_" + turns[0][1]])
                          if len(turns) == 1 else T["analog_pick"]):
@@ -297,8 +315,7 @@ def year_end_block(res: dict) -> None:
     tab = pd.DataFrame({T["ye_year"]: hist["date"].dt.year.astype(str),
                         T["an_date"]: date_col(hist["date"]),
                         T["ye_print"]: fmt_col(p_, 0, sign=True)})
-    st.dataframe(tab.style.map(signed_style, subset=[T["ye_print"]]), hide_index=True,
-                 width="stretch", row_height=28)
+    show_table("dl_ye", tab, hist, signed=[T["ye_print"]])
     st.caption(T["calc_ye_stats"].format(min=n(p_.min(), 0, sign=True),
                                          max=n(p_.max(), 0, sign=True),
                                          med=n(p_.median(), 0, sign=True), n=len(p_)))
@@ -307,6 +324,9 @@ def year_end_block(res: dict) -> None:
                                           be=n(res["ye_breakeven_bp"], 0, sign=True)))
     if "central_pct" in res:
         st.caption(T["calc_ye_rest"])
+
+
+CALC_NOTE_ARGS: dict = {}   # the full calculator note goes to Method
 
 
 def calc_panel() -> None:
@@ -346,8 +366,8 @@ def calc_panel() -> None:
                     "be90": n(abs(res["breakeven_p90_bp"]), 1)}
             st.markdown(f"**{T['calc_' + v].format(**args)}**")
         r = res["rates"]
-        st.caption(T["calc_note"].format(n=res["n_days"], k=len(r),
-                                         t=int(r["kind"].notna().sum())))
+        CALC_NOTE_ARGS.update(n=res["n_days"], k=len(r), t=int(r["kind"].notna().sum()))
+        st.caption(T["calc_note_short"].format(**CALC_NOTE_ARGS))
 
 
 # On a phone the three columns stack in this order: desk, turns, calculator.
@@ -359,29 +379,125 @@ with col_turns:
 with col_calc:
     calc_panel()
 
-# ---------------------------------------------------------------- stat tiles
-usable = carry
-always = usable["carry_bp"].mean()
-perfect = np.maximum(usable["carry_bp"], 0).mean()
+# ------------------------------------------------------- calendar: turn map
 rec = oos[oos["date"].dt.year >= 2024]
-peak = daily["carry_bp"].max()
-
-c1, c2, c3, c4 = st.columns(4)
-c1.metric(T["tile_days"], n(len(daily)), help=T["tile_days_help"])
-# Significance of the headline, from src/dm_test.py.
 dmt = pd.read_csv(PROC / "dm_test.csv").set_index("period")
 DM_ARGS = {"p24": n(dmt.loc["2024+", "p_two_sided"], 4),
            "pall": n(dmt.loc["all", "p_two_sided"], 2),
            "r2all": n(dmt.loc["all", "r2_vs_ar1"], 3, sign=True)}
-c2.metric(T["tile_skill"], n(r2(rec["y"], rec["two_stage"], rec["ar1"]), 3, sign=True),
-          help=T["tile_skill_help"].format(**DM_ARGS))
-c3.metric(T["tile_carry"], f"{n(always, 2)}\u00a0{BP}", help=T["tile_carry_help"])
-c4.metric(T["tile_peak"], f"{n(peak)}\u00a0{BP}", help=T["tile_peak_help"])
+
+st.subheader(T["s2"], anchor="calendar")
+st.caption(T["cap_short_calendar"])
+
+# Diverging scale centred at 0 from the design's validated colours: blue
+# below the top of the range, the neutral band colour at 0, red above.
+LIM = 25
+DIV = alt.Scale(domain=[-LIM, 0, LIM], range=[BLUE, BAND, RED], clamp=True)
+TEXT_ON = "#FFFFFF" if MODE == "light" else C["bg"]   # text on saturated tiles
+TT_TILE = [alt.Tooltip("date_s:N", title=T["tt_date"]),
+           alt.Tooltip("v_s:N", title=T["tt_value"]),
+           alt.Tooltip("mark_s:N", title=T["tt_mark"])]
+
+
+def tile_text(data, x, y) -> alt.Chart:
+    return (alt.Chart(data).mark_text(font=FONT, fontSize=10)
+            .encode(x=x, y=y, text="lab:N", tooltip=TT_TILE,
+                    color=alt.condition(f"abs(datum.v) > {LIM * 0.55}",
+                                        alt.value(TEXT_ON), alt.value(INK))))
+
+
+TURN_MARK = {"year-end": "Y", "quarter-end": "Q", "month-end": "M"}
+hm = daily[daily["month_end"] == 1].copy()
+hm["year"] = hm["date"].dt.year.astype(str)
+hm["mon"] = hm["date"].dt.month.map(lambda m: T["months"][m - 1])
+hm["kind"] = np.where(hm["year_end"] == 1, "year-end",
+                      np.where(hm["quarter_end"] == 1, "quarter-end", "month-end"))
+hm["mark"] = np.where(hm["kind"] == "month-end", "", hm["kind"].map(TURN_MARK))
+hm["mark_s"] = hm["kind"].map(lambda k: T[f"turn_{k}"])
+hm["v"] = hm["spread_hi_bp"]
+hm["v_s"] = fmt_col(hm["v"], 0, sign=True)
+hm["lab"] = hm["v_s"] + np.where(hm["mark"] != "", " " + hm["mark"], "")
+hm["date_s"] = date_col(hm["date"])
+mx = alt.X("mon:O", sort=T["months"], title=None, axis=alt.Axis(labelAngle=0, orient="top"))
+my = alt.Y("year:O", title=None)
+turn_map = (alt.Chart(hm).mark_rect(cornerRadius=3, stroke=C["bg"], strokeWidth=1.5)
+            .encode(x=mx, y=my, tooltip=TT_TILE,
+                    color=alt.Color("v:Q", scale=DIV,
+                                    legend=alt.Legend(title=BP, orient="bottom",
+                                                      gradientLength=140, direction="horizontal"))))
+
+# The next 40 settlement days on the forecast path: ordinary days from the
+# two-stage forecast and its AR(1) decay, turns from the calibrated quantile
+# median, the year-end left blank because it has no model.
+first40 = max(STATE.anchor_date, today())
+if not market_calendar.is_business_day(first40):
+    first40 = market_calendar.next_business_day(first40)
+d40 = market_calendar.business_days(first40, first40 + pd.Timedelta(days=90))[:40]
+path = roll_cost.day_rates(roll_cost.roll_days(d40[0], market_calendar.next_business_day(d40[-1])),
+                           STATE, COEFS)
+path["v"] = np.where(path["kind"] == "year-end", np.nan,
+                     (path["central_pct"] - STATE.target_hi) * 100)
+fomc_days = {market_calendar.next_business_day(m) for m in market_calendar.FOMC_DECISION_DAYS}
+path["mark"] = [TURN_MARK.get(k, "") + ("F" if dd in fomc_days else "")
+                for k, dd in zip(path["kind"], path["date"])]
+path["i"] = range(len(path))
+path["col"], path["row"] = path["i"] % 10, path["i"] // 10
+path["date_s"] = date_col(path["date"])
+path["v_s"] = [T["next40_ye"] if pd.isna(v) else n(v, 1, sign=True) for v in path["v"]]
+path["mark_s"] = [T[f"turn_{k}"] if k else ("FOMC" if "F" in m else "")
+                  for k, m in zip(path["kind"].fillna(""), path["mark"])]
+path["lab"] = path["date"].dt.day.astype(str) + np.where(path["mark"] != "",
+                                                          " " + path["mark"], "")
+path["v"] = path["v"].fillna(0.0)
+px_ = alt.X("col:O", title=None, axis=None)
+py_ = alt.Y("row:O", title=None, axis=None)
+next40 = (alt.Chart(path).mark_rect(cornerRadius=3, stroke=C["bg"], strokeWidth=1.5)
+          .encode(x=px_, y=py_, color=alt.Color("v:Q", scale=DIV, legend=None), tooltip=TT_TILE))
+
+TABLES["dl_next40"] = path[["date", "kind", "central_pct", "p90_pct"]].assign(
+    forecast_bp_over_top=(path["central_pct"] - STATE.target_hi) * 100)
+cm, cn = st.columns([1.6, 1])
+cm.altair_chart(style((turn_map + tile_text(hm, mx, my))
+                      .properties(height=30 * hm["year"].nunique() + 120, title=T["ch_turnmap"])),
+                width="stretch")
+cn.altair_chart(style((next40 + tile_text(path, px_, py_))
+                      .properties(height=4 * 42 + 50, title=T["ch_next40"])), width="stretch")
+
+# Month-end premium by year and annual ON RRP usage, compact.
+dd = daily.dropna(subset=["dev_bp"]).copy()
+dd["dev_c"] = dd["dev_bp"].clip(-25, 25)
+prem = (dd.groupby("year")
+        .apply(lambda g: g.loc[g.month_end == 1, "dev_c"].mean()
+               - g.loc[g.month_end == 0, "dev_c"].mean(), include_groups=False)
+        .rename("premium_bp").reset_index())
+rrp = dd.groupby("year")["rrp_bn_t"].mean().rename("rrp_bn").reset_index()
+prem["premium_s"] = fmt_col(prem["premium_bp"], 2)
+prem["label_s"] = fmt_col(prem["premium_bp"], 1)
+rrp["rrp_s"] = fmt_col(rrp["rrp_bn"], 0)
+left, right = st.columns(2)
+bars = (alt.Chart(prem).mark_bar(color=BLUE, cornerRadiusTopLeft=3,
+                                 cornerRadiusTopRight=3, size=20)
+        .encode(x=alt.X("year:O", title=None),
+                y=alt.Y("premium_bp:Q", title=T["ax_bp"]),
+                tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
+                         alt.Tooltip("premium_s:N", title=T["tt_premium"])]))
+labels = (alt.Chart(prem).mark_text(dy=-7, font=FONT, fontSize=10, color=INK)
+          .encode(x="year:O", y="premium_bp:Q", text="label_s:N"))
+left.altair_chart(style((bars + labels).properties(height=220, title=T["ch_premium"])),
+                  width="stretch")
+ubars = (alt.Chart(rrp).mark_bar(color=ORANGE, cornerRadiusTopLeft=3,
+                                 cornerRadiusTopRight=3, size=20)
+         .encode(x=alt.X("year:O", title=None),
+                 y=alt.Y("rrp_bn:Q", title=T["ax_rrp"]),
+                 tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
+                          alt.Tooltip("rrp_s:N", title=T["tt_rrp"])]))
+right.altair_chart(style(ubars.properties(height=220, title=T["ch_rrp"])), width="stretch")
 
 st.divider()
 
 # ------------------------------------------------------------- the corridor
 st.subheader(T["s1"], anchor="corridor")
+st.caption(T["cap_short_corridor"])
 lo, hi = daily["date"].min().to_pydatetime(), daily["date"].max().to_pydatetime()
 # A fixed key keeps the chosen range when the language, and so the label,
 # changes.
@@ -389,28 +505,23 @@ start, end = st.slider(T["date_range"], min_value=lo, max_value=hi, value=(lo, h
                        format=T["slider_format"], key="range")
 d = daily[(daily["date"] >= start) & (daily["date"] <= end)]
 
-# The two corridor panels are drawn as separate charts, because a vconcat
-# ignores width="stretch" and overflowed its column. To keep their dates
-# aligned they share one explicit x domain, the same y-axis gutter, and the
-# legend sits above the top panel rather than taking width at its side.
-# Drawn alone, each height includes its title, legend and axes, hence taller
-# values than the old 260 and 150 plot heights.
+# Four small multiples on one explicit date domain and one y-axis gutter, so
+# the panels line up by date in each row.
 X_DATE = alt.X("date:T", title=None,
                scale=alt.Scale(domain=[pd.Timestamp(start).isoformat(),
                                        pd.Timestamp(end).isoformat()]))
-Y_GUTTER = 56
+Y_GUTTER = 48
+GUTTER = alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)
 
 band = (alt.Chart(d).mark_area(opacity=0.55, color=BAND)
         .encode(x=X_DATE,
-                y=alt.Y("target_lo:Q", title=T["ax_percent"],
-                        scale=alt.Scale(zero=False),
-                        axis=alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)),
+                y=alt.Y("target_lo:Q", title=T["ax_percent"], scale=alt.Scale(zero=False),
+                        axis=GUTTER),
                 y2="target_hi:Q"))
 # Standing Repo Facility rate from data/srf_rates.csv, one row per FOMC
 # implementation note since the facility opened on 29 July 2021.
-srf_rates = pd.read_csv(ROOT / "data" / "srf_rates.csv", parse_dates=["effective_date"])
 d = pd.merge_asof(d.sort_values("date"),
-                  srf_rates[["effective_date", "srf_rate_pct"]].rename(
+                  SRF_RATES[["effective_date", "srf_rate_pct"]].rename(
                       columns={"effective_date": "date"}).sort_values("date"),
                   on="date", direction="backward")
 rates = d.melt(id_vars="date", value_vars=["sofr", "award_pct", "srf_rate_pct"],
@@ -421,7 +532,7 @@ rates["series"] = rates["series"].map(dict(zip(["sofr", "award_pct", "srf_rate_p
 # language.
 rates["date_s"] = date_col(rates["date"])
 rates["pct_s"] = fmt_col(rates["pct"], 2)
-lines = (alt.Chart(rates).mark_line(strokeWidth=2)
+lines = (alt.Chart(rates).mark_line(strokeWidth=1.6)
          .encode(x=X_DATE,
                  y=alt.Y("pct:Q", title=T["ax_percent"], scale=alt.Scale(zero=False)),
                  color=alt.Color("series:N", title=None,
@@ -433,96 +544,115 @@ lines = (alt.Chart(rates).mark_line(strokeWidth=2)
                  tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
                           alt.Tooltip("series:N", title=T["tt_series"]),
                           alt.Tooltip("pct_s:N", title=T["tt_percent"])]))
-# The corridor is 25bp wide on an axis spanning five percentage points, so the
-# band is a sliver and the position inside it cannot be read off the rates. The
-# second panel plots that position directly, in basis points, on the same
-# dates. Two panels rather than a second y-scale on one.
 # 17 September 2019 reaches 325 bp against a normal range of about -10 to +30,
-# so the axis is clipped to keep the rest readable and the spike is labelled
-# rather than dropped.
+# so the position axis is clipped and the spike is labelled rather than dropped.
 inside = d.dropna(subset=["carry_bp"]).copy()
 inside["date_s"] = date_col(inside["date"])
 inside["carry_s"] = fmt_col(inside["carry_bp"], 1)
 CLIP_HI = 70
-pos = (alt.Chart(inside).mark_line(strokeWidth=2, color=BLUE, clip=True)
+pos = (alt.Chart(inside).mark_line(strokeWidth=1.6, color=BLUE, clip=True)
        .encode(x=X_DATE,
-               y=alt.Y("carry_bp:Q",
-                       title=T["ax_position"].format(clip=CLIP_HI),
-                       scale=alt.Scale(domain=[-15, CLIP_HI]),
-                       axis=alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)),
+               y=alt.Y("carry_bp:Q", title=T["ax_position"].format(clip=CLIP_HI),
+                       scale=alt.Scale(domain=[-15, CLIP_HI]), axis=GUTTER),
                tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
                         alt.Tooltip("carry_s:N", title=T["tt_carry"])]))
-# Only the single largest day is labelled. Annotating every clipped spike put
-# three labels on top of each other around 2019.
-top = inside.loc[[inside["carry_bp"].idxmax()]].copy()
-top["lab"] = fmt_col(top["carry_bp"], 0) + "\u00a0" + BP
-top["y"] = CLIP_HI - 7
-pos = pos + (alt.Chart(top).mark_text(align="left", dx=6, font=FONT,
-                                      fontSize=11, color=RED)
-             .encode(x="date:T", y=alt.Y("y:Q"), text="lab:N"))
+if len(inside):
+    top = inside.loc[[inside["carry_bp"].idxmax()]].copy()
+    top["lab"] = fmt_col(top["carry_bp"], 0) + " " + BP
+    top["y"] = CLIP_HI - 7
+    pos = pos + (alt.Chart(top).mark_text(align="left", dx=6, font=FONT, fontSize=10, color=RED)
+                 .encode(x="date:T", y=alt.Y("y:Q"), text="lab:N"))
 floor = (alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1)
          .encode(y="y:Q"))
-st.altair_chart(style((band + lines).properties(height=340, title=T["ch_band"])),
-                width="stretch")
-st.altair_chart(style((pos + floor).properties(height=320, title=T["ch_position"])),
-                width="stretch")
-# Daily Standing Repo Facility take-up, from src/fetch_srf.py.
-srf = pd.read_csv(PROC / "srf_takeup.csv", parse_dates=["date"])
-srf = srf[(srf["date"] >= start) & (srf["date"] <= end)].copy()
+
+usage = d.dropna(subset=["rrp_bn_t"]).copy()
+usage["date_s"] = date_col(usage["date"])
+usage["rrp_s"] = fmt_col(usage["rrp_bn_t"], 0)
+rrp_daily = (alt.Chart(usage).mark_area(color=ORANGE, opacity=0.75)
+             .encode(x=X_DATE, y=alt.Y("rrp_bn_t:Q", title=T["ax_srf"], axis=GUTTER),
+                     tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
+                              alt.Tooltip("rrp_s:N", title=T["tt_rrp"])]))
+srf = SRF_TAKE[(SRF_TAKE["date"] >= start) & (SRF_TAKE["date"] <= end)].copy()
 srf["date_s"] = date_col(srf["date"])
 srf["srf_s"] = fmt_col(srf["srf_bn"], 1)
 take = (alt.Chart(srf).mark_bar(color=RED, width=2)
-        .encode(x=X_DATE,
-                y=alt.Y("srf_bn:Q", title=T["ax_srf"],
-                        axis=alt.Axis(minExtent=Y_GUTTER, maxExtent=Y_GUTTER)),
+        .encode(x=X_DATE, y=alt.Y("srf_bn:Q", title=T["ax_srf"], axis=GUTTER),
                 tooltip=[alt.Tooltip("date_s:N", title=T["tt_date"]),
                          alt.Tooltip("srf_s:N", title=T["tt_srf"])]))
-st.altair_chart(style(take.properties(height=200, title=T["ch_srf"])), width="stretch")
-st.caption(T["cap1"])
-st.caption(T["cap_srf"])
+
+g1, g2 = st.columns(2)
+g1.altair_chart(style((band + lines).properties(height=260, title=T["ch_band"])), width="stretch")
+g2.altair_chart(style((pos + floor).properties(height=260, title=T["ch_position"])),
+                width="stretch")
+g3, g4 = st.columns(2)
+g3.altair_chart(style(rrp_daily.properties(height=220, title=T["ch_rrp_daily"])), width="stretch")
+g4.altair_chart(style(take.properties(height=220, title=T["ch_srf"])), width="stretch")
 
 st.divider()
 
-# ------------------------------------------- the regime-dependent month-end
-st.subheader(T["s2"], anchor="calendar")
-dd = daily.dropna(subset=["dev_bp"]).copy()
-dd["dev_c"] = dd["dev_bp"].clip(-25, 25)
-prem = (dd.groupby("year")
-        .apply(lambda g: g.loc[g.month_end == 1, "dev_c"].mean()
-               - g.loc[g.month_end == 0, "dev_c"].mean(), include_groups=False)
-        .rename("premium_bp").reset_index())
-rrp = dd.groupby("year")["rrp_bn_t"].mean().rename("rrp_bn").reset_index()
-prem["premium_s"] = fmt_col(prem["premium_bp"], 2)
-prem["label_s"] = fmt_col(prem["premium_bp"], 1)
-rrp["rrp_s"] = fmt_col(rrp["rrp_bn"], 0)
-
-left, right = st.columns(2)
-bars = (alt.Chart(prem).mark_bar(color=BLUE, cornerRadiusTopLeft=4,
-                                 cornerRadiusTopRight=4, size=26)
-        .encode(x=alt.X("year:O", title=None),
-                y=alt.Y("premium_bp:Q", title=T["ax_bp"]),
-                tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
-                         alt.Tooltip("premium_s:N", title=T["tt_premium"])]))
-labels = (alt.Chart(prem).mark_text(dy=-8, font=FONT, fontSize=11, color=INK)
-          .encode(x="year:O", y="premium_bp:Q",
-                  text="label_s:N"))
-left.altair_chart(style((bars + labels).properties(
-    height=300, title=T["ch_premium"])), width="stretch")
-
-ubars = (alt.Chart(rrp).mark_bar(color=ORANGE, cornerRadiusTopLeft=4,
-                                 cornerRadiusTopRight=4, size=26)
-         .encode(x=alt.X("year:O", title=None),
-                 y=alt.Y("rrp_bn:Q", title=T["ax_rrp"]),
-                 tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
-                          alt.Tooltip("rrp_s:N", title=T["tt_rrp"])]))
-right.altair_chart(style(ubars.properties(
-    height=300, title=T["ch_rrp"])), width="stretch")
-st.caption(T["cap2"])
-
-st.divider()
-
-# -------------------------------------------------------- does the model add
+# -------------------------------------------------------------- the model
 st.subheader(T["s3"], anchor="model")
+st.caption(T["cap_short_model"])
+k1, k2 = st.columns(2)
+k1.metric(T["tile_days"], n(len(daily)), help=T["tile_days_help"])
+k2.metric(T["tile_skill"], n(r2(rec["y"], rec["two_stage"], rec["ar1"]), 3, sign=True),
+          help=T["tile_skill_help"].format(**DM_ARGS))
+
+
+def pval(p) -> str:
+    return T["p_undefined"] if pd.isna(p) else n(p, 4)
+
+
+dm = pd.read_csv(PROC / "dm_test.csv")
+years = dm[dm["period"].str.fullmatch(r"\d{4}")]
+r2_view = pd.DataFrame({T["c_year"]: years["period"], T["c_n"]: years["n"].astype(str),
+                        T["c_r2"]: fmt_col(years["r2_vs_ar1"], 3, sign=True),
+                        T["c_rmse"]: fmt_col(years["rmse_model_bp"], 2),
+                        T["c_rmse_ar1"]: fmt_col(years["rmse_ar1_bp"], 2)})
+PERIOD = {"all": T["g_all"]}
+dm_view = pd.DataFrame({T["c_period"]: dm["period"].map(lambda x: PERIOD.get(x, x)),
+                        T["c_n"]: dm["n"].astype(str),
+                        T["c_r2"]: fmt_col(dm["r2_vs_ar1"], 3, sign=True),
+                        T["c_hln"]: [T["p_undefined"] if pd.isna(v) else n(v, 2, sign=True)
+                                     for v in dm["hln_stat"]],
+                        T["c_p"]: [pval(v) for v in dm["p_two_sided"]]})
+cov_raw = pd.read_csv(PROC / "interval_coverage.csv")
+GROUP = {"all": T["g_all"], "month-end": T["g_me"], "other days": T["g_other"],
+         "quarter-end": T["g_qe"], "month-end, 2024+": T["g_me24"],
+         "other days, 2024+": T["g_other24"]}
+cov_view = pd.DataFrame({T["c_group"]: cov_raw["group"].map(lambda g: GROUP.get(g, g)),
+                         T["c_n"]: cov_raw["n"].astype(str),
+                         T["c_cover"]: fmt_col(100 * cov_raw["coverage"], 1) + " %",
+                         T["c_below"]: fmt_col(100 * cov_raw["below"], 1) + " %",
+                         T["c_above"]: fmt_col(100 * cov_raw["above"], 1) + " %",
+                         T["c_width"]: fmt_col(cov_raw["mean_width_bp"], 2)})
+hz = pd.read_csv(PROC / "turn_quantile_horizons.csv")
+hz = hz[hz["type"].isin(["month-end", "quarter-end"]) & hz["version"].isin(["raw", "calibrated"])]
+hz_view = pd.DataFrame({
+    T["c_type"]: hz["type"].map(lambda k: T[f"turn_{k}"]),
+    T["c_h"]: hz["horizon"].astype(str),
+    T["c_version"]: hz["version"].map({"raw": T["v_raw"], "calibrated": T["v_cal"]}),
+    T["c_n"]: hz["n"].astype(str),
+    T["c_cov3"]: ["/".join(n(100 * r[c], 0) for c in ("cover_q50", "cover_q90", "cover_q95"))
+                  for _, r in hz.iterrows()],
+    T["c_pin90"]: fmt_col(hz["pinball_q90"], 2)})
+
+t1, t2 = st.columns(2)
+with t1:
+    st.markdown(f"**{T['tb_r2']}**")
+    show_table("dl_r2", r2_view, years, signed=[T["c_r2"]])
+with t2:
+    st.markdown(f"**{T['tb_dm']}**")
+    show_table("dl_dm", dm_view, dm, signed=[T["c_r2"], T["c_hln"]])
+t3, t4 = st.columns(2)
+with t3:
+    st.markdown(f"**{T['tb_cov']}**")
+    show_table("dl_cov", cov_view, cov_raw)
+with t4:
+    st.markdown(f"**{T['tb_turns']}**")
+    show_table("dl_turnscores", hz_view, hz, height=260)
+
+# R² by year as bars, and the forecast with its 80% interval.
 o = oos.copy()
 o["year"] = o["date"].dt.year
 sk = (o.groupby("year")
@@ -531,35 +661,26 @@ sk = (o.groupby("year")
 sk["sign"] = np.where(sk["r2"] >= 0, "adds", "hurts")   # internal, not shown
 sk["r2_s"] = fmt_col(sk["r2"], 3, sign=True)
 sk["label_s"] = fmt_col(sk["r2"], 2, sign=True)
-
-dv = (alt.Chart(sk).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4,
-                             cornerRadiusBottomLeft=4, cornerRadiusBottomRight=4,
-                             size=26)
+dv = (alt.Chart(sk).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3,
+                             cornerRadiusBottomLeft=3, cornerRadiusBottomRight=3, size=20)
       .encode(x=alt.X("year:O", title=None),
               y=alt.Y("r2:Q", title=T["ax_r2"]),
               color=alt.Color("sign:N", title=None,
-                              scale=alt.Scale(domain=["adds", "hurts"],
-                                              range=[BLUE, RED]),
+                              scale=alt.Scale(domain=["adds", "hurts"], range=[BLUE, RED]),
                               legend=None),
               tooltip=[alt.Tooltip("year:O", title=T["tt_year"]),
                        alt.Tooltip("r2_s:N", title=T["tt_r2"])]))
 zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1).encode(y="y:Q")
+
+
 # dy is a mark property, not an encoding channel, so the label sits above a
 # positive bar and below a negative one via two layers rather than a condition.
 def dlabel(frame: pd.DataFrame, dy: int) -> alt.Chart:
-    return (alt.Chart(frame).mark_text(dy=dy, font=FONT, fontSize=11, color=INK)
+    return (alt.Chart(frame).mark_text(dy=dy, font=FONT, fontSize=10, color=INK)
             .encode(x="year:O", y="r2:Q", text="label_s:N"))
 
 
-dlab = dlabel(sk[sk["r2"] >= 0], -8) + dlabel(sk[sk["r2"] < 0], 14)
-st.altair_chart(style((dv + zero + dlab).properties(
-    height=320, title=T["ch_r2"])),
-    width="stretch")
-st.caption(T["cap3"])
-st.caption(T["cap3_dm"].format(**DM_ARGS))
-
-# Forecast against outcome with the 80% interval from src/intervals.py, which
-# uses only errors of forecasts whose target date came before.
+dlab = dlabel(sk[sk["r2"] >= 0], -7) + dlabel(sk[sk["r2"] < 0], 12)
 fan = o.dropna(subset=["lo80"]).tail(250).copy()
 fan["inside"] = np.where((fan["y"] >= fan["lo80"]) & (fan["y"] <= fan["hi80"]),
                          T["fan_inside"], T["fan_outside"])
@@ -574,24 +695,22 @@ fan_tt = [alt.Tooltip("date_s:N", title=T["tt_date"]),
 fx = alt.X("date:T", title=None)
 fband = (alt.Chart(fan).mark_area(opacity=0.7, color=BAND)
          .encode(x=fx, y=alt.Y("lo80:Q", title=T["ax_dev"]), y2="hi80:Q"))
-fline = (alt.Chart(fan).mark_line(strokeWidth=1.5, color=BLUE)
+fline = (alt.Chart(fan).mark_line(strokeWidth=1.4, color=BLUE)
          .encode(x=fx, y="two_stage:Q", tooltip=fan_tt))
-fdots = (alt.Chart(fan).mark_point(filled=True, size=18)
+fdots = (alt.Chart(fan).mark_point(filled=True, size=14)
          .encode(x=fx, y="y:Q",
                  color=alt.Color("inside:N", title=None,
                                  scale=alt.Scale(domain=[T["fan_inside"], T["fan_outside"]],
                                                  range=[MUTED, RED]),
                                  legend=alt.Legend(orient="top")),
                  tooltip=fan_tt))
-st.altair_chart(style((fband + fline + fdots).properties(height=300, title=T["ch_fan"])),
+c1, c2 = st.columns(2)
+c1.altair_chart(style((dv + zero + dlab).properties(height=240, title=T["ch_r2"])),
                 width="stretch")
-cov = pd.read_csv(PROC / "interval_coverage.csv").set_index("group")["coverage"]
-st.caption(T["cap_fan"].format(all=n(100 * cov["all"], 1),
-                               me=n(100 * cov["month-end"], 1),
-                               qe=n(100 * cov["quarter-end"], 1),
-                               other=n(100 * cov["other days"], 1)))
+c2.altair_chart(style((fband + fline + fdots).properties(height=240, title=T["ch_fan"])),
+                width="stretch")
 
-st.subheader(T["s3b"])
+st.markdown(f"**{T['s3b']}**")
 imp = pd.read_csv(PROC / "permutation_importance.csv")
 KINDS = [T["kind_one"], T["kind_group"]]
 imp["kind"] = np.where(imp["n_cols"] > 1, KINDS[1], KINDS[0])
@@ -599,41 +718,62 @@ imp["kind"] = np.where(imp["n_cols"] > 1, KINDS[1], KINDS[0])
 imp["what"] = imp["what"].map(lambda w: T["groups"].get(w, w))
 for col, dec in (("mean_bp", 4), ("p10", 4), ("p90", 4)):
     imp[col + "_s"] = fmt_col(imp[col], dec, sign=True)
+TABLES["dl_importance"] = imp[["what", "n_cols", "mean_bp", "p10", "p90"]]
 order = imp.sort_values("mean_bp", ascending=False)["what"].tolist()
-# 19 categories: Altair drops labels to avoid overlap unless told not to, and
-# the chart needs the height to show them all or the dots cannot be read.
+# 19 categories: Altair drops labels to avoid overlap unless told not to.
 enc_y = alt.Y("what:N", sort=order, title=None,
-              axis=alt.Axis(labelOverlap=False, labelLimit=220))
-dots = (alt.Chart(imp).mark_point(filled=True, size=90)
+              axis=alt.Axis(labelOverlap=False, labelLimit=200))
+dots = (alt.Chart(imp).mark_point(filled=True, size=60)
         .encode(x=alt.X("mean_bp:Q", title=T["ax_rmse"]),
                 y=enc_y,
                 color=alt.Color("kind:N", title=None,
-                                scale=alt.Scale(domain=KINDS, range=[BLUE, ORANGE])),
+                                scale=alt.Scale(domain=KINDS, range=[BLUE, ORANGE]),
+                                legend=alt.Legend(orient="top")),
                 tooltip=[alt.Tooltip("what:N", title=T["tt_predictor"]),
                          alt.Tooltip("mean_bp_s:N", title=T["tt_rmse"]),
                          alt.Tooltip("p10_s:N", title=T["tt_p10"]),
                          alt.Tooltip("p90_s:N", title=T["tt_p90"])]))
-bars = (alt.Chart(imp).mark_rule(strokeWidth=2, opacity=0.65)
-        .encode(x="p10:Q", x2="p90:Q", y=enc_y,
-                color=alt.Color("kind:N", legend=None,
-                                scale=alt.Scale(domain=KINDS, range=[BLUE, ORANGE]))))
+whisk = (alt.Chart(imp).mark_rule(strokeWidth=2, opacity=0.65)
+         .encode(x="p10:Q", x2="p90:Q", y=enc_y,
+                 color=alt.Color("kind:N", legend=None,
+                                 scale=alt.Scale(domain=KINDS, range=[BLUE, ORANGE]))))
 zline = (alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=MUTED, strokeWidth=1)
          .encode(x="x:Q"))
-st.altair_chart(style((bars + dots + zline).properties(
-    height=28 * len(imp) + 40,
-    title=T["ch_importance"])),
-    width="stretch")
-st.caption(T["cap3b"])
+
+comp = pd.read_csv(PROC / "model_comparison.csv", parse_dates=["date"])
+rival = []
+for name, g in comp.groupby("model", sort=False):
+    g24 = g[g["date"].dt.year >= 2024]
+    rival.append({"model": name, "r2_vs_ar1": r2(g["y"], g["pred"], g["ar1"]),
+                  "r2_vs_ar1_2024": r2(g24["y"], g24["pred"], g24["ar1"]),
+                  "rmse_bp": float(np.sqrt(np.mean((g["y"] - g["pred"]) ** 2)))})
+rival = pd.DataFrame(rival)
+rival_view = pd.DataFrame({T["c_model"]: rival["model"].map(lambda m: T["rivals"].get(m, m)),
+                           T["c_r2_all"]: fmt_col(rival["r2_vs_ar1"], 3, sign=True),
+                           T["c_r2_24"]: fmt_col(rival["r2_vs_ar1_2024"], 3, sign=True),
+                           T["c_rmse"]: fmt_col(rival["rmse_bp"], 3)})
+i1, i2 = st.columns([1.3, 1])
+i1.altair_chart(style((whisk + dots + zline).properties(height=21 * len(imp) + 80)),
+                width="stretch")
+with i2:
+    st.markdown(f"**{T['tb_rival']}**")
+    show_table("dl_rival", rival_view, rival, signed=[T["c_r2_all"], T["c_r2_24"]])
 
 st.divider()
 
 # ------------------------------------------------------------ is it worth it
 st.subheader(T["s4"], anchor="carry")
-st.markdown(T["s4_intro"])
+st.caption(T["cap_short_carry"])
+always = carry["carry_bp"].mean()
+peak = daily["carry_bp"].max()
+r1, r2c, r3 = st.columns([1, 1, 3])
+r1.metric(T["tile_carry"], f"{n(always, 2)} {BP}", help=T["tile_carry_help"])
+r2c.metric(T["tile_peak"], f"{n(peak)} {BP}", help=T["tile_peak_help"])
 # None marks the rule's own column, shown as a dash.
 NET = [4.829, 5.030, 5.114, 5.117, 5.132]
 VS_ALWAYS = [None, 0.201, 0.284, 0.287, 0.303]
 VS_KNOWN = [-0.201, None, 0.084, 0.087, 0.103]
+RULES = ["always lend", "known only, no model", "AR(1)", "two-stage LASSO", "perfect foresight"]
 dash = lambda v: "—" if v is None else n(v, 3, sign=True)  # noqa: E731
 rules = pd.DataFrame({
     T["col_rule"]: [T[k] for k in ("rule_always", "rule_known", "rule_ar1",
@@ -642,9 +782,54 @@ rules = pd.DataFrame({
     T["col_vs_always"]: [dash(v) for v in VS_ALWAYS],
     T["col_vs_known"]: [dash(v) for v in VS_KNOWN],
 })
-st.dataframe(rules, hide_index=True, width="stretch")
-st.markdown(T["conclusion"])
+with r3:
+    show_table("dl_rules", rules, pd.DataFrame({"rule": RULES, "net_bp": NET,
+                                                "vs_always_lend_bp": VS_ALWAYS,
+                                                "vs_known_only_bp": VS_KNOWN}),
+               signed=[T["col_vs_always"], T["col_vs_known"]])
 
 st.divider()
-st.html('<div id="method"></div>')
-st.caption(T["sources"])
+
+# ----------------------------------------------------------------- method
+st.subheader(T["method_title"], anchor="method")
+with st.expander(T["about_title"]):
+    st.markdown(T["intro"])
+with st.expander(T["m_turns"]):
+    st.markdown(T["turns_intro"].format(rrp=n(STATE.scarcity["rrp_bn_lag1"], 1),
+                                        tga=n(STATE.scarcity["tga_bn_lag1"], 0),
+                                        base=n(STATE.base_bp, 1, sign=True)))
+    st.markdown(T["turns_table_note"])
+    st.markdown(T["analogs_note"])
+    st.markdown(T["calc_note"].format(**CALC_NOTE_ARGS) if CALC_NOTE_ARGS
+                else T["calc_note"].split(". ", 1)[-1])
+with st.expander(T["m_corridor"]):
+    st.markdown(T["cap1"])
+    st.markdown(T["cap_srf"])
+with st.expander(T["m_calendar"]):
+    st.markdown(T["cap2"])
+with st.expander(T["m_model"]):
+    cov = cov_raw.set_index("group")["coverage"]
+    st.markdown(T["cap3"])
+    st.markdown(T["cap3_dm"].format(**DM_ARGS))
+    st.markdown(T["cap_fan"].format(all=n(100 * cov["all"], 1), me=n(100 * cov["month-end"], 1),
+                                    qe=n(100 * cov["quarter-end"], 1),
+                                    other=n(100 * cov["other days"], 1)))
+with st.expander(T["m_importance"]):
+    st.markdown(T["cap3b"])
+with st.expander(T["m_carry"]):
+    st.markdown(T["s4_intro"])
+    st.markdown(T["conclusion"])
+with st.expander(T["m_timing"]):
+    st.markdown(T["timing_table"])
+    st.markdown(T["timing_note"])
+    st.markdown(T["sources"])
+
+# ----------------------------------------------------------------- footer
+st.divider()
+st.markdown(T["footer_sources"])
+st.markdown(f"**{T['dl_title']}**")
+dl_cols = st.columns(4)
+for i, (key, frame) in enumerate(TABLES.items()):
+    dl_cols[i % 4].download_button(T.get(key, key), frame.to_csv(index=False).encode("utf-8"),
+                                   file_name=f"{key[3:]}.csv", mime="text/csv",
+                                   key=f"download_{key}", width="stretch")
