@@ -1,4 +1,4 @@
-"""Where repo prints inside the Fed's corridor.
+"""Repo turn monitor: what the next repo turn will cost.
 
 Streamlit app for the Machine Learning with R project (emlyon, 1BLAML).
 Reads the precomputed files in data/processed so the page loads without

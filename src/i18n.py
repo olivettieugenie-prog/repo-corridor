@@ -38,16 +38,16 @@ def date_short(ts, lang: str = "en") -> str:
 
 
 EN: dict[str, object] = {
-    "page_title": "Repo in the Fed's corridor",
+    "page_title": "Repo turn monitor",
     "lang_label": "Language",
-    "title": "Where repo prints inside the Fed's corridor",
+    "title": "What the next repo turn will cost",
     "intro": (
-        "Overnight repo trades between two administered rates: the ON RRP "
-        "facility below and interest on reserves above. This page asks what "
-        "moves SOFR inside that corridor, whether a penalised regression "
-        "predicts it better than an autoregression, and whether that "
-        "prediction is worth any money. Public data only, from the New York "
-        "Fed and the US Treasury."
+        "Forecasts of where SOFR will print against the top of the Fed's "
+        "target range on the coming month-ends and quarter-ends, up to three "
+        "weeks ahead, with ranges tested on past turns. Ordinary days are "
+        "shown for context only: beyond a few days the model adds nothing to a "
+        "simple autoregression. Public data from the New York Fed and the US "
+        "Treasury."
     ),
     "bp": "bp",
     "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -362,7 +362,6 @@ EN: dict[str, object] = {
     ),
 
     # desk view
-    "desk_title": "Tomorrow's call",
     "desk_target": "Target date: **{target}**",
     "desk_forecast": "Deviation forecast",
     "desk_range": "80% range: {lo} to {hi} bp",
@@ -606,17 +605,17 @@ EN: dict[str, object] = {
 }
 
 FR: dict[str, object] = {
-    "page_title": "Le repo dans le corridor de la Fed",
+    "page_title": "Moniteur des fins de mois repo",
     "lang_label": "Langue",
-    "title": "Où se fixe le repo dans le corridor de la Fed",
+    "title": "Ce que coûtera le prochain passage de fin de mois sur le repo",
     "intro": (
-        "Le repo au jour le jour se traite entre deux taux administrés : la "
-        "facilité ON RRP en bas et la rémunération des réserves en haut. Cette "
-        "page examine ce qui fait varier le SOFR à l'intérieur de ce corridor, "
-        "si une régression pénalisée le prévoit mieux qu'un modèle "
-        "autorégressif, et si cette prévision a une valeur économique. "
-        "Données publiques uniquement, issues de la Fed de New York et du "
-        "Trésor américain."
+        "Prévisions du niveau du SOFR par rapport au haut de la fourchette "
+        "cible de la Fed pour les prochaines fins de mois et de trimestre, "
+        "jusqu'à trois semaines à l'avance, avec des fourchettes testées sur "
+        "les passages passés. Les jours ordinaires sont affichés pour "
+        "contexte : au-delà de quelques jours, le modèle n'apporte rien de plus "
+        "qu'une simple autorégression. Données publiques de la Fed de New York "
+        "et du Trésor américain."
     ),
     "bp": "pb",
     "months": ["janv.", "févr.", "mars", "avr.", "mai", "juin",
@@ -936,7 +935,6 @@ FR: dict[str, object] = {
         "borne de référence, pas le 90e centile de la moyenne."
     ),
 
-    "desk_title": "La prévision pour demain",
     "desk_target": "Date cible : **{target}**",
     "desk_forecast": "Déviation prévue",
     "desk_range": "Intervalle à 80 % : {lo} à {hi} pb",
@@ -1187,8 +1185,7 @@ FR: dict[str, object] = {
 
 
 def _fr_typography(s: str) -> str:
-    s = re.sub(r" ([:])", NBSP + r"\1", s)
-    s = re.sub(r" ([;?!%])", NNBSP + r"\1", s)
+    s = re.sub(r" ([:;?!%])", NNBSP + r"\1", s)
     return re.sub(r"(\d) (pb\b)", r"\1" + NBSP + r"\2", s)
 
 

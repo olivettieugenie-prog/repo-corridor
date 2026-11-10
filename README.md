@@ -1,8 +1,10 @@
-# Repo spread: what drives it, and can it be traded?
+# Repo turn monitor: what the next repo turn will cost
 
 Individual project for Machine Learning with R (emlyon, 1BLAML).
 
-## Question
+The app forecasts where SOFR will print against the top of the Fed's target range on the coming month-ends and quarter-ends, up to three weeks ahead, with ranges tested on past turns. Ordinary days are shown for context only: beyond a few days the model adds nothing to a simple autoregression. It grew out of the research question below, and most of this README records that analysis.
+
+## Original research question
 
 Which public factors explain the daily gap between SOFR and the Fed's administered rate (IORB), and does that explanation produce a signal that survives an honest backtest?
 
@@ -227,7 +229,7 @@ This is the result after extending the administered-rate history back to 2018, w
 
 So the model has statistical skill, at R² +0.13 against AR(1) from 2024 (Diebold-Mariano p = 0.0002, though not significant over the full sample from 2020), and that skill is worth essentially nothing here. The reason is structural: the Fed's two facilities bound the corridor so tightly that the overnight placement decision has almost no money in it. The action is confined to 2022 and 2023. In 2022 always-lend gave up 1.55 bp against the facility and every smarter rule merely gets back to zero, which is why about $2.0tn sat at ON RRP: not to chase carry, but because the facility simply paid more. From 2024 the carry is positive every day and all rules collapse onto always-lend. In 2023 the carry is so thin that switching costs take the entire benefit, and even perfect foresight nets less than always-lend.
 
-The honest conclusion is that this is a measurement exercise about where repo prints inside the corridor, not a trading strategy.
+The honest conclusion is that the overnight placement decision is not a trading strategy. Where the model does earn its keep is in pricing the turns, which is what the app now leads with.
 
 ## Extensions left out for lack of time
 
