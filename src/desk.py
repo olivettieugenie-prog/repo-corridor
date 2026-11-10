@@ -67,6 +67,22 @@ def morning_note(row: pd.Series, lang: str) -> tuple[str, str]:
     return line1, line2
 
 
+def client_note(kind: str, date, days_left: int, q: dict | None, analog_bp: pd.Series,
+                lang: str) -> str:
+    """Two lines for a client, from a fixed template: when the turn is, what
+    the model expects against the top of the range and its 90% bound, and
+    what the closest past turns printed. Year-ends, which have no model,
+    get the history-only variant. Only the numbers change."""
+    t = STRINGS[lang]
+    n = lambda x, dec=1, sign=True: num(x, dec, lang, sign)  # noqa: E731
+    args = {"Kind": t[f"note_kind_{kind}"], "days": days_left, "date": long_date(date, lang),
+            "kinds": t[f"turns_{kind}"], "a": n(analog_bp.min(), 0), "b": n(analog_bp.max(), 0)}
+    if kind == "year-end" or q is None:
+        return t["client_line1_ye"].format(**args) + "\n" + t["client_line2_ye"].format(**args)
+    args.update(q50=n(q["q50"]), q90=n(q["q90"]))
+    return t["client_line1"].format(**args) + "\n" + t["client_line2"].format(**args)
+
+
 def track_record(live: pd.DataFrame) -> dict:
     """Scored days (latest run per target), interval hit rate and RMSE of the
     model and of AR(1) on exactly those days."""

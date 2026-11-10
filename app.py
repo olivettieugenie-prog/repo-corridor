@@ -379,6 +379,16 @@ def turns_panel() -> None:
         for kind, h, share in RAW_MEDIANS:
             st.caption(T["turns_raw_median"].format(kinds=T[f"turns_{kind}"], h=h,
                                                     above=n(100 * (1 - share), 0)))
+        # Client note on the first upcoming turn: the numbers come from the
+        # table above and the analog table, the words from a fixed template.
+        d0, k0 = turns[0]
+        left0 = roll_cost.days_until(STATE, d0)
+        q0 = (None if k0 == "year-end" else
+              roll_cost.turn_quantiles(COEFS, k0, STATE.scarcity, STATE.base_bp, left0, POLICY))
+        an0 = analogs.analogs(daily, {**STATE.scarcity, "base_bp": STATE.base_bp}, k0, today())
+        note = desk.client_note(k0, d0, left0, q0, an0["printed_bp"], LANG)
+        st.markdown(f"**{T['client_title']}**")
+        st.code(note, language=None, wrap_lines=True)
         st.caption(T["turns_state"].format(rrp=n(STATE.scarcity["rrp_bn_lag1"], 1),
                                            tga=n(STATE.scarcity["tga_bn_lag1"], 0),
                                            base=n(STATE.base_bp, 1, sign=True)))

@@ -173,6 +173,25 @@ EN: dict[str, object] = {
         "random forest": "random forest",
         "gradient boosting": "gradient boosting",
     },
+    # client note under Next turns
+    "note_kind_month-end": "Month-end",
+    "note_kind_quarter-end": "Quarter-end",
+    "note_kind_year-end": "Year-end",
+    "client_line1": (
+        "{Kind} is in {days} settlement days ({date}). Against the top of the "
+        "target range the model expects about {q50} bp, with 90% of outcomes "
+        "at or below {q90} bp."
+    ),
+    "client_line2": "Past {kinds} in similar conditions printed between {a} and {b} bp.",
+    "client_line1_ye": (
+        "{Kind} is in {days} settlement days ({date}). There is no model for "
+        "year-ends."
+    ),
+    "client_line2_ye": (
+        "Past year-ends in similar conditions printed between {a} and {b} bp "
+        "against the top of the range: history, not a forecast."
+    ),
+    "client_title": "Client note",
     # forward pressure calendar and track record
     "nav_forward": "Forward",
     "fwd_title": "Forward pressure calendar",
@@ -722,6 +741,28 @@ FR: dict[str, object] = {
         "random forest": "forêt aléatoire",
         "gradient boosting": "gradient boosting",
     },
+    "note_kind_month-end": "La fin de mois",
+    "note_kind_quarter-end": "La fin de trimestre",
+    "note_kind_year-end": "La fin d'année",
+    "client_line1": (
+        "{Kind} tombe dans {days} jours de règlement ({date}). Par rapport au "
+        "haut de la fourchette cible, le modèle anticipe environ {q50} pb, avec "
+        "90 % des réalisations attendues à {q90} pb ou moins."
+    ),
+    "client_line2": (
+        "Les {kinds} passées dans des conditions comparables se sont fixées "
+        "entre {a} et {b} pb."
+    ),
+    "client_line1_ye": (
+        "{Kind} tombe dans {days} jours de règlement ({date}). Il n'existe pas "
+        "de modèle pour les fins d'année."
+    ),
+    "client_line2_ye": (
+        "Les fins d'année passées dans des conditions comparables se sont "
+        "fixées entre {a} et {b} pb par rapport au haut de la fourchette : "
+        "historique, pas une prévision."
+    ),
+    "client_title": "Note client",
     "nav_forward": "À venir",
     "fwd_title": "Calendrier de pression à venir",
     "fwd_note": (

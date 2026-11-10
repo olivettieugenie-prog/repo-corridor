@@ -184,6 +184,29 @@ class DeskAppTest(unittest.TestCase):
         self.assertIn("FOMC", w[0])
 
 
+class ClientNote(unittest.TestCase):
+    def test_month_end_template(self):
+        prints = pd.Series([-12.0, 3.0, 22.0])
+        for lang in LANGS:
+            T = STRINGS[lang]
+            note = desk.client_note("month-end", "2026-11-30", 14, {"q50": -6.7, "q90": 5.8},
+                                    prints, lang)
+            l1, l2 = note.split("\n")
+            self.assertEqual(l1, T["client_line1"].format(
+                Kind=T["note_kind_month-end"], days=14, date=desk.long_date("2026-11-30", lang),
+                q50=num(-6.7, 1, lang, True), q90=num(5.8, 1, lang, True)))
+            self.assertEqual(l2, T["client_line2"].format(kinds=T["turns_month-end"],
+                                                          a=num(-12, 0, lang, True),
+                                                          b=num(22, 0, lang, True)))
+
+    def test_year_end_is_history_only(self):
+        for lang in LANGS:
+            note = desk.client_note("year-end", "2026-12-31", 36, None,
+                                    pd.Series([-20.0, 50.0]), lang)
+            self.assertTrue(note.split("\n")[1].startswith(
+                STRINGS[lang]["client_line2_ye"].split("{")[0]))
+
+
 class DeskLogic(unittest.TestCase):
     def test_track_record_metrics(self):
         log = make_log(30, 22)

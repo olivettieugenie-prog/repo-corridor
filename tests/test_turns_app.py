@@ -93,7 +93,11 @@ class TurnsAppTest(unittest.TestCase):
                     txt = self.texts(at)
                     for key in ("calc_central", "calc_p90", "calc_be", "calc_be_p90"):
                         self.assertIn(T[key], txt)
-                    self.assertIn(T["turns_table_note"], txt)
+                    note = at.code[0].value
+                    self.assertTrue(note.startswith(T["note_kind_month-end"]))
+                    self.assertIn(T["client_line2"].split("{a}")[0].format(
+                        kinds=T["turns_month-end"]), note)
+                    self.assertEqual(len(note.split("\n")), 2)
                     self.assertGreaterEqual(len(at.expander), 2)        # about, analogs
                     self.assertGreaterEqual(len(at.dataframe), 3)       # turns, analogs, rules
                     verdicts = [T[f"calc_{v}"].split("{")[0] for v in ("term", "insure", "roll")]
