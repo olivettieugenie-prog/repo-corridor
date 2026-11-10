@@ -133,6 +133,15 @@ LIVE, LIVE_SOURCE = load_live(os.environ.get("REPO_LIVE_URL", live_feed.RAW_URL)
                               os.environ.get("REPO_LIVE_LOCAL", str(live_feed.LOCAL)))
 LIVE = live_feed.latest_per_target(LIVE) if LIVE is not None else None
 LIVE_ROW = LIVE.iloc[-1] if LIVE is not None else None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_forward(url: str, local: str) -> tuple[pd.DataFrame | None, str]:
+    return live_feed.load_forward(url, Path(local))
+
+
+FWD, FWD_SOURCE = load_forward(os.environ.get("REPO_FORWARD_URL", live_feed.FORWARD_URL),
+                               os.environ.get("REPO_FORWARD_LOCAL", str(live_feed.FORWARD_LOCAL)))
 SRF_RATES = pd.read_csv(ROOT / "data" / "srf_rates.csv", parse_dates=["effective_date"])
 SRF_TAKE = pd.read_csv(PROC / "srf_takeup.csv", parse_dates=["date"])
 
@@ -191,9 +200,60 @@ def show_table(key: str, view: pd.DataFrame, raw: pd.DataFrame, signed=(), **kw)
                  **kw)
 
 
-def desk_panel() -> None:
+def forward_panel() -> None:
+    """The next 20 settlement days as the live job forecasts them, with the
+    80% range, turns highlighted and untested days greyed."""
     with st.container(border=True):
-        st.subheader(T["desk_title"], anchor="desk")
+        st.subheader(T["fwd_title"], anchor="forward")
+        if FWD is None:
+            st.info(T["fwd_none"])
+            return
+        f = FWD.copy()
+        TABLES["dl_forward"] = f
+        status = np.where(f["tested"] == 0, T["fwd_untested"],
+                          np.where(f["kind"].fillna("") != "", T["fwd_turn"], T["fwd_ordinary"]))
+        f["status"] = status
+        f["lab"] = f["date"].map(lambda x: f"{x.day} {T['months'][x.month - 1]}")
+        f["mark"] = f["kind"].fillna("").map(lambda k: {"month-end": "M", "quarter-end": "Q",
+                                                         "year-end": "Y"}.get(k, ""))
+        f["date_s"] = date_col(f["date"])
+        f["f_s"] = fmt_col(f["forecast_bp"], 1, sign=True)
+        f["range_s"] = fmt_col(f["lo80_bp"], 1, sign=True) + " ; " + fmt_col(f["hi80_bp"], 1, sign=True)
+        f["sofr_s"] = fmt_col(f["implied_sofr_pct"], 3) + "\u00a0%"
+        f["cov_s"] = [n(100 * (r["cov80_turn"] if r["mark"] else r["cov80_other"]), 0) + "\u00a0%"
+                      if r["tested"] else "—" for _, r in f.iterrows()]
+        order = f["lab"].tolist()
+        x = alt.X("lab:N", sort=order, title=None, axis=alt.Axis(labelAngle=-45))
+        col = alt.Color("status:N", title=None, legend=alt.Legend(orient="top"),
+                        scale=alt.Scale(domain=[T["fwd_ordinary"], T["fwd_turn"], T["fwd_untested"]],
+                                        range=[BLUE, RED, MUTED]))
+        tt = [alt.Tooltip("date_s:N", title=T["tt_date"]), alt.Tooltip("h:Q", title=T["tt_h"]),
+              alt.Tooltip("f_s:N", title=T["tt_forecast"]), alt.Tooltip("range_s:N", title=T["tt_range"]),
+              alt.Tooltip("sofr_s:N", title=T["tt_sofr"]), alt.Tooltip("cov_s:N", title=T["tt_cov"]),
+              alt.Tooltip("status:N", title=T["tt_status"])]
+        op = alt.condition("datum.tested == 0", alt.value(0.45), alt.value(1.0))
+        rng = (alt.Chart(f).mark_rule(strokeWidth=5, opacity=0.35)
+               .encode(x=x, y=alt.Y("lo80_bp:Q", title=T["fwd_y"]), y2="hi80_bp:Q",
+                       color=col, tooltip=tt))
+        pts = (alt.Chart(f).mark_point(filled=True, size=70)
+               .encode(x=x, y="forecast_bp:Q", color=col, opacity=op, tooltip=tt))
+        marks = (alt.Chart(f[f["mark"] != ""]).mark_text(dy=-12, font=FONT, fontSize=11,
+                                                         fontWeight="bold", color=RED)
+                 .encode(x=x, y="hi80_bp:Q", text="mark:N"))
+        zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1).encode(y="y:Q")
+        st.altair_chart(style((rng + zero + pts + marks).properties(height=250)), width="stretch")
+        tested = int(f["tested_horizon"].iloc[0])
+        sc = pd.read_csv(PROC / "forward_backtest.csv").set_index(["h", "days"])["coverage80"]
+        held = desk.long_date(LIVE_ROW["tga_date"], LANG) if LIVE_ROW is not None else "—"
+        st.caption(T["fwd_note"].format(t=tested, c1=n(100 * sc[(1, "other days")], 0),
+                                        ct=n(100 * sc[(tested, "other days")], 0),
+                                        cturn=n(100 * sc[(1, "turn days")], 0), date=held))
+
+
+def track_tile() -> None:
+    """The same-day call, the latest scored forecasts and the running hit rate."""
+    with st.container(border=True):
+        st.subheader(T["track_title"])
         if LIVE_ROW is None:
             st.info(T["desk_none"])
             return
@@ -205,28 +265,41 @@ def desk_panel() -> None:
             st.warning(T["desk_stale"].format(target=target))
         if int(row.get("range_unconfirmed", 0) or 0):
             st.warning(T["desk_unconfirmed"].format(target=target))
-        st.markdown(T["desk_target"].format(target=target))
+        st.markdown(T["track_call"].format(date=target))
         k1, k2 = st.columns(2)
         k1.metric(T["desk_forecast"], f"{n(row['forecast_bp'], 1, sign=True)}\u00a0{BP}")
         k1.caption(T["desk_range"].format(lo=n(row["lower_bp"], 1, sign=True),
                                           hi=n(row["upper_bp"], 1, sign=True)))
         if pd.notna(row.get("implied_sofr_pct")):
             k2.metric(T["desk_sofr"], f"{n(row['implied_sofr_pct'], 2)}\u00a0%")
-            k2.caption(T["desk_sofr_range"].format(lo=n(row["implied_sofr_lo_pct"], 2),
-                                                   hi=n(row["implied_sofr_hi_pct"], 2)))
-        flags = desk.flags_in_play(row, LANG)
-        st.markdown(T["desk_flags"].format(flags=", ".join(flags) or T["desk_no_flags"]))
-        line1, line2 = desk.morning_note(row, LANG)
-        st.markdown(f"> {line1}  \n> {line2}")
-        st.caption(T["desk_asof"].format(run=desk.run_time_et(row["run_time_utc"], LANG),
-                                         asof=desk.long_date(row["as_of_date"], LANG)))
+        scored = LIVE.dropna(subset=["realised_bp"]).tail(5).iloc[::-1]
+        start = desk.long_date(LIVE["target_date"].min(), LANG)
+        if len(scored):
+            view = pd.DataFrame({
+                T["tr_target"]: date_col(scored["target_date"]),
+                T["tr_fc"]: fmt_col(scored["forecast_bp"], 1, sign=True),
+                T["tr_range"]: fmt_col(scored["lower_bp"], 1, sign=True) + " ; "
+                + fmt_col(scored["upper_bp"], 1, sign=True),
+                T["tr_real"]: fmt_col(scored["realised_bp"], 1, sign=True),
+                T["tr_hit"]: [T["yes"] if h == 1 else T["no"] for h in scored["hit"]]})
+            show_table("dl_track", view, LIVE.dropna(subset=["realised_bp"]),
+                       signed=[T["tr_fc"], T["tr_real"]])
+            all_scored = LIVE.dropna(subset=["realised_bp"])
+            st.caption(T["track_hit"].format(hit=n(100 * all_scored["hit"].mean(), 0),
+                                             n=len(all_scored), start=start))
+        else:
+            st.caption(T["track_none_scored"].format(start=start))
         tr = desk.track_record(LIVE)
-        start = desk.long_date(tr["start"], LANG)
-        if "hit" in tr:
+        if "hit" in tr:   # RMSE against AR(1) once 20 days are scored
             st.caption(T["desk_track"].format(n=tr["n"], start=start, hit=n(100 * tr["hit"], 0),
                                               rmse=n(tr["rmse"], 2), rmse_ar1=n(tr["rmse_ar1"], 2)))
-        else:
-            st.caption(T["desk_track_pending"].format(start=start, n=tr["n"]))
+        with st.expander(T["track_note_title"]):
+            flags = desk.flags_in_play(row, LANG)
+            st.markdown(T["desk_flags"].format(flags=", ".join(flags) or T["desk_no_flags"]))
+            line1, line2 = desk.morning_note(row, LANG)
+            st.markdown(f"> {line1}  \n> {line2}")
+            st.caption(T["desk_asof"].format(run=desk.run_time_et(row["run_time_utc"], LANG),
+                                             asof=desk.long_date(row["as_of_date"], LANG)))
 
 
 def analog_table(kind: str) -> None:
@@ -355,7 +428,7 @@ def calc_panel() -> None:
                            format=fmt, key="calc_end")
         q_ = st.number_input(T["calc_quote"], value=round(STATE.target_hi + STATE.base_bp / 100, 2),
                              step=0.01, format="%.2f", key="calc_quote")
-        res = roll_cost.price(s_, e_, q_, STATE, COEFS)
+        res = roll_cost.price(s_, e_, q_, STATE, COEFS, forward=FWD)
         if res["days"].empty:
             st.warning(T["calc_empty"])
             return
@@ -384,14 +457,16 @@ def calc_panel() -> None:
         st.caption(T["calc_note_short"].format(**CALC_NOTE_ARGS))
 
 
-# On a phone the three columns stack in this order: desk, turns, calculator.
-col_desk, col_turns, col_calc = st.columns([0.95, 1.9, 1])
-with col_desk:
-    desk_panel()
+# The forward calendar leads; then Next turns, the calculator and the small
+# track-record tile. On a phone they stack in that order.
+forward_panel()
+col_turns, col_calc, col_track = st.columns([1.75, 1.05, 0.95])
 with col_turns:
     turns_panel()
 with col_calc:
     calc_panel()
+with col_track:
+    track_tile()
 
 # ------------------------------------------------------- calendar: turn map
 rec = oos[oos["date"].dt.year >= 2024]
@@ -440,42 +515,10 @@ turn_map = (alt.Chart(hm).mark_rect(cornerRadius=3, stroke=C["bg"], strokeWidth=
                                     legend=alt.Legend(title=BP, orient="bottom",
                                                       gradientLength=140, direction="horizontal"))))
 
-# The next 40 settlement days on the forecast path: ordinary days from the
-# two-stage forecast and its AR(1) decay, turns from the calibrated quantile
-# median, the year-end left blank because it has no model.
-first40 = max(STATE.anchor_date, today())
-if not market_calendar.is_business_day(first40):
-    first40 = market_calendar.next_business_day(first40)
-d40 = market_calendar.business_days(first40, first40 + pd.Timedelta(days=90))[:40]
-path = roll_cost.day_rates(roll_cost.roll_days(d40[0], market_calendar.next_business_day(d40[-1])),
-                           STATE, COEFS)
-path["v"] = np.where(path["kind"] == "year-end", np.nan,
-                     (path["central_pct"] - STATE.target_hi) * 100)
-fomc_days = {market_calendar.next_business_day(m) for m in market_calendar.FOMC_DECISION_DAYS}
-path["mark"] = [TURN_MARK.get(k, "") + ("F" if dd in fomc_days else "")
-                for k, dd in zip(path["kind"], path["date"])]
-path["i"] = range(len(path))
-path["col"], path["row"] = path["i"] % 10, path["i"] // 10
-path["date_s"] = date_col(path["date"])
-path["v_s"] = [T["next40_ye"] if pd.isna(v) else n(v, 1, sign=True) for v in path["v"]]
-path["mark_s"] = [T[f"turn_{k}"] if k else ("FOMC" if "F" in m else "")
-                  for k, m in zip(path["kind"].fillna(""), path["mark"])]
-path["lab"] = path["date"].dt.day.astype(str) + np.where(path["mark"] != "",
-                                                          " " + path["mark"], "")
-path["v"] = path["v"].fillna(0.0)
-px_ = alt.X("col:O", title=None, axis=None)
-py_ = alt.Y("row:O", title=None, axis=None)
-next40 = (alt.Chart(path).mark_rect(cornerRadius=3, stroke=C["bg"], strokeWidth=1.5)
-          .encode(x=px_, y=py_, color=alt.Color("v:Q", scale=DIV, legend=None), tooltip=TT_TILE))
-
-TABLES["dl_next40"] = path[["date", "kind", "central_pct", "p90_pct"]].assign(
-    forecast_bp_over_top=(path["central_pct"] - STATE.target_hi) * 100)
-cm, cn = st.columns([1.6, 1])
-cm.altair_chart(style((turn_map + tile_text(hm, mx, my))
+# The forward calendar at the top of the page replaces the old 40-day strip.
+st.altair_chart(style((turn_map + tile_text(hm, mx, my))
                       .properties(height=30 * hm["year"].nunique() + 120, title=T["ch_turnmap"])),
                 width="stretch")
-cn.altair_chart(style((next40 + tile_text(path, px_, py_))
-                      .properties(height=4 * 42 + 50, title=T["ch_next40"])), width="stretch")
 
 # Month-end premium by year and annual ON RRP usage, compact.
 dd = daily.dropna(subset=["dev_bp"]).copy()

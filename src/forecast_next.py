@@ -49,6 +49,7 @@ from sklearn.model_selection import TimeSeriesSplit
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+import forward_backtest as fb  # noqa: E402
 import model_lasso as m  # noqa: E402
 from build_dataset import BASE_MIN, BASE_WIN, calendar_flags  # noqa: E402
 from intervals import error_quantiles  # noqa: E402
@@ -56,6 +57,8 @@ from market_calendar import business_days, fomc_effective_day, next_business_day
 
 WORK = ROOT / ".live_work"
 LIVE = ROOT / "data" / "live" / "forecast.csv"
+FORWARD = ROOT / "data" / "live" / "forward.csv"
+FORWARD_DAYS = 20
 NOTES = ROOT / "data" / "fed_administered_rates.csv"
 FLAGS = ["month_end", "quarter_end", "year_end", "mid_settle", "month_start"]
 
@@ -174,6 +177,69 @@ def score(live: pd.DataFrame, d: pd.DataFrame, now: str) -> pd.DataFrame:
     return live
 
 
+# ---------------------------------------------------------- forward path
+def range_path(d: pd.DataFrame, dates: list[pd.Timestamp]) -> list[dict]:
+    """Target range and rate-change flags for each future date, from the
+    implementation-note table (the last range carried when no note covers it)."""
+    out, prev_hi, prev_lo = [], float(d["target_hi"].iloc[-1]), float(d["target_lo"].iloc[-1])
+    prev_change = int(d["rate_change"].iloc[-1])
+    for t in dates:
+        lo, hi, _, unconfirmed = target_range(d, t)
+        change = int(abs(hi - prev_hi) > 1e-9 or abs(lo - prev_lo) > 1e-9)
+        out.append({"target_lo": lo, "target_hi": hi, "rate_change": change,
+                    "rate_change_lag1": prev_change, "range_unconfirmed": unconfirmed})
+        prev_lo, prev_hi, prev_change = lo, hi, change
+    return out
+
+
+def forward_path(d: pd.DataFrame, X: pd.DataFrame, y: pd.Series, days: int = FORWARD_DAYS,
+                 history: pd.DataFrame | None = None) -> pd.DataFrame:
+    """The next `days` settlement days, forecast as forward_backtest.py tests it:
+    AR(1) iterated from today's deviation plus the second stage at each day's
+    calendar flags, scarcity held at today's value, base held at today's
+    60-day median. The 80% range at horizon h comes from the last 250
+    walk-forward errors at that same horizon."""
+    as_of = d["date"].iloc[-1]
+    c, phi, st2, mu, sd, other = fb.fit_block(X.iloc[-m.WINDOW:], y.iloc[-m.WINDOW:].to_numpy(float))
+    dates, t = [], as_of
+    for _ in range(days):
+        t = next_business_day(t)
+        dates.append(t)
+    rng = range_path(d, dates)
+    dev0 = float(np.clip(d["dev_bp"].iloc[-1], -m.WINSOR_BP, m.WINSOR_BP))
+    _, base = implied_sofr(d, float(d["target_hi"].iloc[-1]), 0.0)
+
+    hist = history if history is not None else fb.paths(d, horizons=range(1, days + 1))
+    sc = pd.read_csv(ROOT / "data" / "processed" / "forward_backtest.csv")
+    tested = fb.tested_horizon(sc)
+    cover = sc.set_index(["h", "days"])["coverage80"]
+
+    rows, ar = [], dev0
+    for h, (t, r) in enumerate(zip(dates, rng), start=1):
+        ar = c + phi * ar
+        x = feature_row(d, t, r["rate_change"])
+        x["rate_change_lag1"] = r["rate_change_lag1"]
+        f = ar + float(st2.predict((x[other].to_numpy(float) - mu) / sd)[0])
+        e = hist[hist["h"] == h].sort_values("target")
+        e = (e["y"] - e["f"]).to_numpy()[-250:]
+        q10, q90 = (np.quantile(e, (0.10, 0.90)) if len(e) >= 50 else (np.nan, np.nan))
+        flags = x[FLAGS].iloc[0]
+        kind = ("year-end" if flags["year_end"] else "quarter-end" if flags["quarter_end"]
+                else "month-end" if flags["month_end"] else "")
+        hs = fb.nearest_scored(h)
+        rows.append({
+            "h": h, "date": t.date().isoformat(), "kind": kind,
+            "forecast_bp": f, "lo80_bp": f + q10, "hi80_bp": f + q90, "p90_bp": f + q90,
+            "base_bp": base, "target_hi": r["target_hi"],
+            "implied_sofr_pct": r["target_hi"] + (base + f) / 100,
+            "tested": int(h <= tested), "tested_horizon": tested, "scored_h": hs,
+            "cov80_other": float(cover[(hs, "other days")]),
+            "cov80_turn": float(cover[(hs, "turn days")]),
+            "range_unconfirmed": r["range_unconfirmed"],
+        })
+    return pd.DataFrame(rows)
+
+
 def main() -> int:
     fetch = "--no-fetch" not in sys.argv
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -221,6 +287,14 @@ def main() -> int:
           + ", ".join(c for c in FLAGS if row[c]) + (" rate change" if change else "")
           + (" RANGE UNCONFIRMED" if unconfirmed else ""))
     print(f"scored rows: {int(live['realised_bp'].notna().sum())} of {len(live)}; wrote {LIVE}")
+
+    fwd = forward_path(d, X, y)
+    assert abs(fwd.at[0, "forecast_bp"] - f) < 1e-8, "day 1 of the path must be the call above"
+    fwd.insert(0, "as_of_date", as_of.date().isoformat())
+    fwd.insert(0, "run_time_utc", now)
+    fwd.round(6).to_csv(FORWARD, index=False)
+    print(f"forward path: {len(fwd)} days to {fwd['date'].iloc[-1]}, tested to day "
+          f"{int(fwd['tested_horizon'].iloc[0])}; wrote {FORWARD}")
     return 0
 
 

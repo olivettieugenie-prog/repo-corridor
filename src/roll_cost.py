@@ -186,8 +186,15 @@ def build_state(daily: pd.DataFrame, live_row: pd.Series | None = None,
 
 
 # ------------------------------------------------------------------- price
-def day_rates(days: pd.DataFrame, st: State, coefs: pd.DataFrame) -> pd.DataFrame:
-    """Central and 90th percentile rate, percent, for every day in the window."""
+def day_rates(days: pd.DataFrame, st: State, coefs: pd.DataFrame,
+              forward: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Central and 90th percentile rate, percent, for every day in the window.
+
+    Ordinary days inside the live job's forward path (data/live/forward.csv)
+    take its tested forecast and 90th percentile; days beyond it follow the
+    AR(1) decay from the anchor."""
+    fwd = ({pd.Timestamp(r["date"]): r for _, r in forward.iterrows()}
+           if forward is not None else {})
     out = days.copy()
     out["kind"] = [turn_kind(d) for d in out["date"]]
     policy = median_policy() if "horizon" in coefs.columns and MEDIAN_BIAS.exists() else None
@@ -199,6 +206,11 @@ def day_rates(days: pd.DataFrame, st: State, coefs: pd.DataFrame) -> pd.DataFram
             q = turn_quantiles(coefs, kind, st.scarcity, st.base_bp, days_until(st, d), policy)
             central.append(st.target_hi + q["q50"] / 100)
             high.append(st.target_hi + q["q90"] / 100)
+            continue
+        if d in fwd:
+            r = fwd[d]
+            central.append(r["target_hi"] + (r["base_bp"] + r["forecast_bp"]) / 100)
+            high.append(r["target_hi"] + (r["base_bp"] + r["p90_bp"]) / 100)
             continue
         dev = st.anchor_dev
         for _ in range(steps[d]):
@@ -215,7 +227,8 @@ def weighted_rate(rates, days) -> float:
     return float(np.sum(np.asarray(rates, float) * days) / days.sum())
 
 
-def price(start, end, quote_pct: float, st: State, coefs: pd.DataFrame) -> dict:
+def price(start, end, quote_pct: float, st: State, coefs: pd.DataFrame,
+          forward: pd.DataFrame | None = None) -> dict:
     start, end = pd.Timestamp(start), pd.Timestamp(end)
     days = roll_days(start, end)
     res = {"days": days, "n_days": int(days["days"].sum()) if len(days) else 0,
@@ -232,7 +245,7 @@ def price(start, end, quote_pct: float, st: State, coefs: pd.DataFrame) -> dict:
         res["ye_days"] = int(days["days"].sum())
         res["ye_breakeven_bp"] = (quote_pct - st.target_hi) * 100
         return res
-    r = day_rates(rest, st, coefs)
+    r = day_rates(rest, st, coefs, forward)
     central = weighted_rate(r["central_pct"], r["days"])
     high = weighted_rate(r["p90_pct"], r["days"])
     res.update(rates=r, central_pct=central, p90_pct=high,

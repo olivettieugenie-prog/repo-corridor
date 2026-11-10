@@ -25,6 +25,11 @@ RAW_URL = ("https://raw.githubusercontent.com/olivettieugenie-prog/repo-corridor
            "data/data/live/forecast.csv")
 LOCAL = Path(os.environ.get("REPO_LIVE_LOCAL", ROOT / "data" / "live" / "forecast.csv"))
 DATES = ["as_of_date", "target_date"]
+# The 20-day forward path the same job writes next to the log; it is
+# replaced on every run. REPO_FORWARD_URL and REPO_FORWARD_LOCAL override it.
+FORWARD_URL = RAW_URL.replace("forecast.csv", "forward.csv")
+FORWARD_LOCAL = ROOT / "data" / "live" / "forward.csv"
+FORWARD_DATES = ["as_of_date", "date"]
 
 
 def _ssl_context() -> ssl.SSLContext:
@@ -39,14 +44,15 @@ def _ssl_context() -> ssl.SSLContext:
         return ssl.create_default_context()
 
 
-def _parse(text: str) -> pd.DataFrame:
-    df = pd.read_csv(io.StringIO(text), parse_dates=DATES)
+def _parse(text: str, dates=DATES) -> pd.DataFrame:
+    df = pd.read_csv(io.StringIO(text), parse_dates=dates)
     if df.empty or "forecast_bp" not in df.columns:
         raise ValueError("forecast log has no rows")
     return df
 
 
-def load(url: str | None = None, local: Path | None = None, timeout: float = 10) -> tuple[pd.DataFrame | None, str]:
+def load(url: str | None = None, local: Path | None = None, timeout: float = 10,
+         dates=DATES) -> tuple[pd.DataFrame | None, str]:
     """Return (log, source) where source is 'github', 'local' or 'none'."""
     url = url or os.environ.get("REPO_LIVE_URL", RAW_URL)
     local = Path(local or os.environ.get("REPO_LIVE_LOCAL", LOCAL))
@@ -54,7 +60,7 @@ def load(url: str | None = None, local: Path | None = None, timeout: float = 10)
         req = urllib.request.Request(url, headers={"User-Agent": "repo-corridor-app"})
         with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
             text = r.read().decode("utf-8")
-        df = _parse(text)
+        df = _parse(text, dates)
         try:
             local.parent.mkdir(parents=True, exist_ok=True)
             local.write_text(text)
@@ -64,9 +70,17 @@ def load(url: str | None = None, local: Path | None = None, timeout: float = 10)
     except Exception:
         pass
     try:
-        return _parse(local.read_text()), "local"
+        return _parse(local.read_text(), dates), "local"
     except Exception:
         return None, "none"
+
+
+def load_forward(url: str | None = None, local: Path | None = None,
+                 timeout: float = 10) -> tuple[pd.DataFrame | None, str]:
+    """The forward path, with the same GitHub-then-local fallback."""
+    url = url or os.environ.get("REPO_FORWARD_URL", FORWARD_URL)
+    local = Path(local or os.environ.get("REPO_FORWARD_LOCAL", FORWARD_LOCAL))
+    return load(url, local, timeout, dates=FORWARD_DATES)
 
 
 def latest_per_target(df: pd.DataFrame) -> pd.DataFrame:

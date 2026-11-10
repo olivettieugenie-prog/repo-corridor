@@ -24,7 +24,7 @@ import pandas as pd  # noqa: E402
 from i18n import LANGS, STRINGS, date_short  # noqa: E402
 
 TODAY = "2026-11-09"
-KEYS = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY")
+KEYS = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY", "REPO_FORWARD_URL", "REPO_FORWARD_LOCAL")
 
 
 class TurnsAppTest(unittest.TestCase):
@@ -34,6 +34,8 @@ class TurnsAppTest(unittest.TestCase):
         os.environ["REPO_LIVE_URL"] = "https://example.invalid/forecast.csv"
         os.environ["REPO_LIVE_LOCAL"] = str(Path(self.tmp.name) / "none.csv")
         os.environ["REPO_TODAY"] = TODAY
+        os.environ["REPO_FORWARD_URL"] = "https://example.invalid/forward.csv"
+        os.environ["REPO_FORWARD_LOCAL"] = str(ROOT / "tests" / "fixtures" / "forward.csv")
 
     def tearDown(self):
         for k, v in self.saved.items():
@@ -75,7 +77,7 @@ class TurnsAppTest(unittest.TestCase):
                     T = STRINGS[lang]
                     at = self.run_app(lang, theme)
                     heads = [h.value for h in at.subheader]
-                    self.assertEqual(heads[:3], [T["desk_title"], T["turns_title"], T["calc_title"]])
+                    self.assertEqual(heads[:3], [T["fwd_title"], T["turns_title"], T["calc_title"]])
                     tab = self.turns_table(at, T)
                     self.assertEqual(list(tab[T["tt_col_date"]]),
                                      [date_short(pd.Timestamp("2026-11-30"), lang),

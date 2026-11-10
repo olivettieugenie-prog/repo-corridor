@@ -19,12 +19,12 @@ sys.path.insert(0, str(ROOT / "src"))
 import dashboard as db  # noqa: E402
 from i18n import LANGS, STRINGS  # noqa: E402
 
-HEADING = {"desk": "desk_title", "turns": "turns_title", "term-roll": "calc_title",
+HEADING = {"forward": "fwd_title", "turns": "turns_title", "term-roll": "calc_title",
            "calendar": "s2", "corridor": "s1", "model": "s3", "carry": "s4",
            "method": "method_title"}
 TABLE_KEYS = ["dl_turns", "dl_analogs", "dl_r2", "dl_dm", "dl_cov", "dl_turnscores",
               "dl_rival", "dl_rules"]
-KEYS = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY")
+KEYS = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY", "REPO_FORWARD_URL", "REPO_FORWARD_LOCAL")
 
 
 class LayoutTest(unittest.TestCase):
@@ -33,7 +33,7 @@ class LayoutTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         os.environ.update(REPO_LIVE_URL="https://example.invalid/x.csv",
                           REPO_LIVE_LOCAL=str(Path(self.tmp.name) / "none.csv"),
-                          REPO_TODAY="2026-11-09")
+                          REPO_TODAY="2026-11-09", REPO_FORWARD_URL="https://example.invalid/forward.csv", REPO_FORWARD_LOCAL=str(ROOT / "tests" / "fixtures" / "forward.csv"))
 
     def tearDown(self):
         for k, v in self.saved.items():
@@ -58,7 +58,7 @@ class LayoutTest(unittest.TestCase):
             for theme in ("light", "dark"):
                 with self.subTest(lang=lang, theme=theme):
                     at = self.run_app(lang, theme)
-                    anchors = {h.proto.anchor: h.value for h in at.subheader}
+                    anchors = {h.proto.anchor: h.value for h in at.subheader if h.proto.anchor}
                     self.assertEqual(set(anchors), set(db.SECTIONS))
                     for sec, key in HEADING.items():
                         self.assertEqual(anchors[sec], STRINGS[lang][key])
@@ -83,6 +83,24 @@ class LayoutTest(unittest.TestCase):
         at = self.run_app(window=(date(2026, 12, 28), date(2027, 1, 8)))
         self.assertIn("download_dl_ye", [b.key for b in at.download_button])
         self.assertEqual(len(at.dataframe), len(TABLE_KEYS) + 1)
+
+    def test_forward_panel(self):
+        for lang in LANGS:
+            for theme in ("light", "dark"):
+                with self.subTest(lang=lang, theme=theme):
+                    T = STRINGS[lang]
+                    at = self.run_app(lang, theme)
+                    heads = [h.value for h in at.subheader]
+                    self.assertEqual(heads[0], T["fwd_title"])
+                    caps = " ".join(c.value for c in at.caption)
+                    self.assertIn(T["fwd_note"].split("{")[0], caps)
+                    self.assertIn("15", caps)                        # the tested horizon
+                    self.assertIn("download_dl_forward", [b.key for b in at.download_button])
+
+    def test_forward_panel_without_a_path(self):
+        os.environ["REPO_FORWARD_LOCAL"] = str(Path(self.tmp.name) / "none.csv")
+        at = self.run_app()
+        self.assertIn(STRINGS["en"]["fwd_none"], [i.value for i in at.info])
 
     def test_tables_only_through_show_table(self):
         """show_table registers the CSV; a direct st.dataframe would skip it."""

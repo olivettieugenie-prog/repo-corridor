@@ -61,7 +61,7 @@ def fit_block(Xtr: pd.DataFrame, ytr: np.ndarray):
     return float(b1.intercept_), float(b1.coef_[0]), st2, mu, sd, other
 
 
-def paths(daily: pd.DataFrame) -> pd.DataFrame:
+def paths(daily: pd.DataFrame, horizons=HORIZONS) -> pd.DataFrame:
     d = daily.sort_values("date").reset_index(drop=True)
     X, y, when = m.build(d)
     # X row i is as of SOFR date asof[i], with target when[i] = the next date.
@@ -82,7 +82,7 @@ def paths(daily: pd.DataFrame) -> pd.DataFrame:
             t = asof_dates.iloc[i]
             base = float(base_next[when.iloc[i]])
             dev0 = float(X.at[i, "dev_w"])
-            for h in HORIZONS:
+            for h in horizons:
                 # The target is h settlement days after t in the daily table.
                 # build() drops one mid-sample date (6 August 2021), so X rows
                 # are not consecutive days; look the target up by date, and
@@ -136,6 +136,11 @@ def scores(p: pd.DataFrame) -> pd.DataFrame:
                          "coverage80": float(((iv["y"] >= iv["lo80"]) & (iv["y"] <= iv["hi80"])).mean()),
                          "width80_bp": float((iv["hi80"] - iv["lo80"]).mean())})
     return pd.DataFrame(rows)
+
+
+def nearest_scored(h: int, scored=HORIZONS) -> int:
+    """The backtested horizon closest to h; ties go to the shorter one."""
+    return min(sorted(scored), key=lambda s: abs(s - h))
 
 
 def tested_horizon(sc: pd.DataFrame, days: str = "other days") -> int:

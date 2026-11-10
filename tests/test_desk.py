@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import desk  # noqa: E402
-from i18n import LANGS, STRINGS  # noqa: E402
+from i18n import LANGS, STRINGS, num  # noqa: E402
 from market_calendar import business_days  # noqa: E402
 
 TARGET = pd.Timestamp("2026-11-30")   # a Monday and a month-end
@@ -57,7 +57,10 @@ class DeskAppTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
-        self.env = {k: os.environ.get(k) for k in ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY")}
+        self.env = {k: os.environ.get(k) for k in ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY",
+                                                   "REPO_FORWARD_URL", "REPO_FORWARD_LOCAL")}
+        os.environ["REPO_FORWARD_URL"] = "https://example.invalid/forward.csv"
+        os.environ["REPO_FORWARD_LOCAL"] = str(ROOT / "tests" / "fixtures" / "forward.csv")
 
     def tearDown(self):
         for k, v in self.env.items():
@@ -116,7 +119,7 @@ class DeskAppTest(unittest.TestCase):
                     T = STRINGS[lang]
                     self.serve(make_log(5, 3), tag=f"fresh_{lang}_{theme}")
                     at = self.run_app(lang, theme)
-                    self.assertEqual(at.subheader[0].value, T["desk_title"])
+                    self.assertIn(T["track_title"], [h.value for h in at.subheader])
                     txt = self.texts(at)
                     self.assertEqual(self.desk_warnings(at), [])
                     line1, line2 = desk.morning_note(
@@ -125,8 +128,11 @@ class DeskAppTest(unittest.TestCase):
                     self.assertIn(T["desk_forecast"], txt)
                     self.assertIn(T["desk_sofr"], txt)
                     self.assertIn(line2.split(".")[0], txt)
-                    start = desk.long_date(make_log(5, 3)["target_date"].min(), lang)
-                    self.assertIn(T["desk_track_pending"].format(start=start, n=3), txt)
+                    log = make_log(5, 3)
+                    start = desk.long_date(log["target_date"].min(), lang)
+                    hit = log.dropna(subset=["realised_bp"])["hit"].mean()
+                    self.assertIn(T["track_hit"].format(hit=num(100 * hit, 0, lang), n=3,
+                                                        start=start), txt)
                     self.assertNotIn(T["desk_src_local"], txt)
 
     def test_stale_forecast_warning(self):
@@ -166,7 +172,7 @@ class DeskAppTest(unittest.TestCase):
                 self.serve(log, tag=f"track_{lang}")
                 txt = self.texts(self.run_app(lang))
                 self.assertIn(f"{tr['n']} ", txt)
-                self.assertNotIn(STRINGS[lang]["desk_track_pending"].split("{")[0], txt)
+                self.assertIn(STRINGS[lang]["track_hit"].split("{")[0], txt)
                 head = STRINGS[lang]["desk_track"].split("{")[0]
                 self.assertIn(head, txt)
 

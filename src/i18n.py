@@ -68,7 +68,7 @@ EN: dict[str, object] = {
     ),
     "cap_short_calendar": (
         "SOFR minus the top of the range on each month-end, bp; Q quarter-end, "
-        "Y year-end. Right: the next 40 settlement days on the forecast path."
+        "Y year-end."
     ),
     "ch_turnmap": "Month-end prints, bp over the top of the range",
     "ch_next40": "Next 40 settlement days, forecast bp",
@@ -173,6 +173,39 @@ EN: dict[str, object] = {
         "random forest": "random forest",
         "gradient boosting": "gradient boosting",
     },
+    # forward pressure calendar and track record
+    "nav_forward": "Forward",
+    "fwd_title": "Forward pressure calendar",
+    "fwd_note": (
+        "Next 20 settlement days, SOFR against its 60-day median, bp, with the "
+        "80% range. Tested to day {t}: the range held {c1}% at 1 day and "
+        "{ct}% at {t} days on ordinary days, {cturn}% on turns; greyed days "
+        "are untested. ON RRP and TGA held at their {date} values."
+    ),
+    "fwd_none": "The forward path appears after the next run of the daily job.",
+    "fwd_ordinary": "ordinary day",
+    "fwd_turn": "turn",
+    "fwd_untested": "untested",
+    "fwd_y": "bp vs 60-day median",
+    "tt_h": "day",
+    "tt_range": "80% range, bp",
+    "tt_sofr": "implied SOFR",
+    "tt_cov": "tested coverage",
+    "tt_status": "status",
+    "track_title": "Track record",
+    "track_call": "Same-day call, {date}",
+    "track_hit": "Hit rate {hit}% · scored days: {n} · since {start}.",
+    "track_none_scored": "No forecast scored yet; the record started on {start}.",
+    "track_note_title": "Morning note",
+    "tr_target": "target",
+    "tr_fc": "forecast, bp",
+    "tr_range": "80% range",
+    "tr_real": "realised, bp",
+    "tr_hit": "in range",
+    "yes": "yes",
+    "no": "no",
+    "dl_track": "Track record",
+    "dl_forward": "Forward path",
     # dashboard header, links and market strip
     "hdr_asof": "Rates to {rates} · balances to {bal} · live forecast run {run} New York time",
     "hdr_asof_nolive": "Rates to {rates} · balances to {bal} · no live forecast yet",
@@ -183,7 +216,6 @@ EN: dict[str, object] = {
     ),
     "about_title": "About this page",
     "nav_label": "Sections",
-    "nav_desk": "Desk",
     "nav_turns": "Turns",
     "nav_term_roll": "Term/Roll",
     "nav_corridor": "Corridor",
@@ -585,8 +617,7 @@ FR: dict[str, object] = {
     ),
     "cap_short_calendar": (
         "SOFR moins le haut de la fourchette à chaque fin de mois, en pb ; Q fin "
-        "de trimestre, Y fin d'année. À droite : les 40 prochains jours de "
-        "règlement selon la prévision."
+        "de trimestre, Y fin d'année."
     ),
     "ch_turnmap": "Fins de mois, pb au-dessus du haut de la fourchette",
     "ch_next40": "40 prochains jours de règlement, prévision en pb",
@@ -691,6 +722,39 @@ FR: dict[str, object] = {
         "random forest": "forêt aléatoire",
         "gradient boosting": "gradient boosting",
     },
+    "nav_forward": "À venir",
+    "fwd_title": "Calendrier de pression à venir",
+    "fwd_note": (
+        "20 prochains jours de règlement, SOFR face à sa médiane sur 60 jours, "
+        "en pb, avec l'intervalle à 80 %. Testé jusqu'au jour {t} : "
+        "l'intervalle a contenu {c1} % à 1 jour et {ct} % à {t} jours les jours "
+        "ordinaires, {cturn} % aux échéances ; les jours grisés ne sont pas "
+        "testés. ON RRP et TGA figés à leur valeur du {date}."
+    ),
+    "fwd_none": "La trajectoire apparaîtra après la prochaine exécution de la tâche quotidienne.",
+    "fwd_ordinary": "jour ordinaire",
+    "fwd_turn": "échéance",
+    "fwd_untested": "non testé",
+    "fwd_y": "pb vs médiane sur 60 jours",
+    "tt_h": "jour",
+    "tt_range": "intervalle à 80 %, pb",
+    "tt_sofr": "SOFR implicite",
+    "tt_cov": "couverture testée",
+    "tt_status": "statut",
+    "track_title": "Historique",
+    "track_call": "Prévision du jour, {date}",
+    "track_hit": "Taux de réussite {hit} % · jours évalués : {n} · depuis le {start}.",
+    "track_none_scored": "Aucune prévision évaluée pour l'instant ; l'historique a commencé le {start}.",
+    "track_note_title": "Note du matin",
+    "tr_target": "cible",
+    "tr_fc": "prévision, pb",
+    "tr_range": "intervalle à 80 %",
+    "tr_real": "réalisé, pb",
+    "tr_hit": "dans l'intervalle",
+    "yes": "oui",
+    "no": "non",
+    "dl_track": "Historique",
+    "dl_forward": "Trajectoire à venir",
     "hdr_asof": "Taux au {rates} · encours au {bal} · prévision calculée le {run}, heure de New York",
     "hdr_asof_nolive": "Taux au {rates} · encours au {bal} · pas encore de prévision en conditions réelles",
     "hdr_delay": (
@@ -700,7 +764,6 @@ FR: dict[str, object] = {
     ),
     "about_title": "À propos de cette page",
     "nav_label": "Sections",
-    "nav_desk": "Desk",
     "nav_turns": "Échéances",
     "nav_term_roll": "Terme/JJ",
     "nav_corridor": "Corridor",

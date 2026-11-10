@@ -93,10 +93,11 @@ class TestAppHeader(unittest.TestCase):
         import os
         import tempfile
         from streamlit.testing.v1 import AppTest
-        keys = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY")
+        keys = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY", "REPO_FORWARD_URL",
+                "REPO_FORWARD_LOCAL")
         saved = {k: os.environ.get(k) for k in keys}
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ.update(REPO_LIVE_URL="https://example.invalid/x.csv",
+            os.environ.update(REPO_FORWARD_URL="https://example.invalid/forward.csv", REPO_FORWARD_LOCAL=str(ROOT / "tests" / "fixtures" / "forward.csv"), REPO_LIVE_URL="https://example.invalid/x.csv",
                               REPO_LIVE_LOCAL=str(Path(tmp) / "none.csv"), REPO_TODAY="2026-11-09")
             try:
                 for lang in LANGS:
@@ -111,8 +112,9 @@ class TestAppHeader(unittest.TestCase):
                             htmls = " ".join(h.proto.body for h in at.html)
                             self.assertEqual(htmls.count('class="strip-tile"'), 8)
                             self.assertEqual(re.findall(r'href="#([\w-]+)"', htmls), db.SECTIONS)
-                            self.assertEqual([h.proto.anchor for h in at.subheader], db.SECTIONS[:3]
-                                             + ["calendar", "corridor", "model", "carry", "method"])
+                            self.assertEqual([h.proto.anchor for h in at.subheader if h.proto.anchor],
+                                             db.SECTIONS[:3] + ["calendar", "corridor", "model",
+                                                                "carry", "method"])
                             caps = " ".join(c.value for c in at.caption)
                             self.assertIn(STRINGS[lang]["hdr_delay"], caps)
             finally:
