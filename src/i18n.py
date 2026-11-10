@@ -195,17 +195,17 @@ EN: dict[str, object] = {
     # forward pressure calendar and track record
     "nav_forward": "Forward",
     "fwd_title": "Forward pressure calendar",
-    "fwd_note": (
-        "Next 20 settlement days, SOFR against its 60-day median, bp, with the "
-        "80% range. Tested to day {t}: the range held {c1}% at 1 day and "
-        "{ct}% at {t} days on ordinary days, {cturn}% on turns; greyed days "
-        "are untested. ON RRP and TGA held at their {date} values."
-    ),
     "fwd_none": "The forward path appears after the next run of the daily job.",
-    "fwd_ordinary": "ordinary day",
-    "fwd_turn": "turn",
-    "fwd_untested": "untested",
-    "fwd_y": "bp vs 60-day median",
+    "fwd_y_top": "bp vs top of range",
+    "fwd_ctx": "context, AR decay",
+    "fwd_turnq": "turn: p50–p95",
+    "fwd_q_tt": "p50 / p90 / p95, bp",
+    "fwd_caption": (
+        "Turns show the calibrated turn quantiles because the pooled 80% range "
+        "held only {tmin}–{tmax}% of past turns. Ordinary days are context: "
+        "their R² against AR(1) is {r1} at 1 day, {r5} at 5 and {r10} at 10, "
+        "so days beyond {days} are faded. ON RRP and TGA held at {date}."
+    ),
     "tt_h": "day",
     "tt_range": "80% range, bp",
     "tt_sofr": "implied SOFR",
@@ -764,18 +764,18 @@ FR: dict[str, object] = {
     "client_title": "Note client",
     "nav_forward": "À venir",
     "fwd_title": "Calendrier de pression à venir",
-    "fwd_note": (
-        "20 prochains jours de règlement, SOFR face à sa médiane sur 60 jours, "
-        "en pb, avec l'intervalle à 80 %. Testé jusqu'au jour {t} : "
-        "l'intervalle a contenu {c1} % à 1 jour et {ct} % à {t} jours les jours "
-        "ordinaires, {cturn} % aux échéances ; les jours grisés ne sont pas "
-        "testés. ON RRP et TGA figés à leur valeur du {date}."
-    ),
     "fwd_none": "La trajectoire apparaîtra après la prochaine exécution de la tâche quotidienne.",
-    "fwd_ordinary": "jour ordinaire",
-    "fwd_turn": "échéance",
-    "fwd_untested": "non testé",
-    "fwd_y": "pb vs médiane sur 60 jours",
+    "fwd_y_top": "pb vs haut de la fourchette",
+    "fwd_ctx": "contexte, décroissance AR",
+    "fwd_turnq": "échéance : p50–p95",
+    "fwd_q_tt": "p50 / p90 / p95, pb",
+    "fwd_caption": (
+        "Les échéances portent les quantiles calibrés, car l'intervalle commun à "
+        "80 % n'a contenu que {tmin}–{tmax} % des échéances passées. Les jours "
+        "ordinaires sont du contexte : leur R² face à l'AR(1) vaut {r1} à "
+        "1 jour, {r5} à 5 et {r10} à 10, d'où l'estompage au-delà de {days} "
+        "jours. ON RRP et TGA figés au {date}."
+    ),
     "tt_h": "jour",
     "tt_range": "intervalle à 80 %, pb",
     "tt_sofr": "SOFR implicite",

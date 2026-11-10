@@ -200,54 +200,90 @@ def show_table(key: str, view: pd.DataFrame, raw: pd.DataFrame, signed=(), **kw)
                  **kw)
 
 
+CONTEXT_DAYS = 5   # beyond this the forward path's gain over AR(1) is about zero
+
+
 def forward_panel() -> None:
-    """The next 20 settlement days as the live job forecasts them, with the
-    80% range, turns highlighted and untested days greyed."""
+    """The next 20 settlement days against the top of the target range.
+
+    Turn days carry the calibrated turn quantiles at the matching horizon
+    (median dot, 90th percentile tick, bar to the 95th): the pooled 80% range
+    covers only 56 to 63% of turns in forward_backtest.csv. Ordinary days are
+    a muted context line from the AR decay, faded beyond five days where the
+    model's gain over AR(1) is about zero."""
     with st.container(border=True):
         st.subheader(T["fwd_title"], anchor="forward")
         if FWD is None:
             st.info(T["fwd_none"])
             return
         f = FWD.copy()
-        TABLES["dl_forward"] = f
-        status = np.where(f["tested"] == 0, T["fwd_untested"],
-                          np.where(f["kind"].fillna("") != "", T["fwd_turn"], T["fwd_ordinary"]))
-        f["status"] = status
         f["lab"] = f["date"].map(lambda x: f"{x.day} {T['months'][x.month - 1]}")
-        f["mark"] = f["kind"].fillna("").map(lambda k: {"month-end": "M", "quarter-end": "Q",
-                                                         "year-end": "Y"}.get(k, ""))
+        f["kind"] = f["kind"].fillna("")
+        f["mark"] = f["kind"].map({"month-end": "M", "quarter-end": "Q", "year-end": "Y", "": ""})
         f["date_s"] = date_col(f["date"])
-        f["f_s"] = fmt_col(f["forecast_bp"], 1, sign=True)
-        f["range_s"] = fmt_col(f["lo80_bp"], 1, sign=True) + " ; " + fmt_col(f["hi80_bp"], 1, sign=True)
-        f["sofr_s"] = fmt_col(f["implied_sofr_pct"], 3) + "\u00a0%"
-        f["cov_s"] = [n(100 * (r["cov80_turn"] if r["mark"] else r["cov80_other"]), 0) + "\u00a0%"
-                      if r["tested"] else "—" for _, r in f.iterrows()]
+        # Everything on one axis: SOFR minus the top of the range, bp. The
+        # ordinary path is a deviation from the 60-day median, so add it back.
+        f["y"] = f["base_bp"] + f["forecast_bp"]
+        f["y_s"] = fmt_col(f["y"], 1, sign=True)
+        f["faded"] = (f["h"] > CONTEXT_DAYS).astype(int)
+        f["cat"] = np.where(f["kind"] != "", T["fwd_turnq"], T["fwd_ctx"])
+        turns = []
+        for _, r in f[f["kind"].isin(["month-end", "quarter-end"])].iterrows():
+            q = roll_cost.turn_quantiles(COEFS, r["kind"], STATE.scarcity, STATE.base_bp,
+                                         roll_cost.days_until(STATE, r["date"]), POLICY)
+            sc = TSCORE.loc[(r["kind"], q["horizon"])]
+            turns.append({"lab": r["lab"], "date_s": r["date_s"], "h": r["h"], "mark": r["mark"],
+                          "q50": q["q50"], "q90": q["q90"], "q95": q["q95"],
+                          "q_s": " / ".join(n(q[k], 1, sign=True) for k in ("q50", "q90", "q95")),
+                          "hz": q["horizon"],
+                          "cov_s": "/".join(n(100 * sc[c], 0) for c in
+                                            ("cover_q50", "cover_q90", "cover_q95")) + "\u00a0%",
+                          "cat": T["fwd_turnq"]})
+        tq = pd.DataFrame(turns)
+        TABLES["dl_forward"] = FWD.assign(
+            sofr_minus_top_bp=f["y"], context_only=(f["kind"] == "").astype(int),
+            faded=f["faded"]).merge(
+            tq[["h", "q50", "q90", "q95", "hz"]].rename(columns={"hz": "turn_horizon"})
+            if len(tq) else pd.DataFrame(columns=["h"]), on="h", how="left")
+
         order = f["lab"].tolist()
         x = alt.X("lab:N", sort=order, title=None, axis=alt.Axis(labelAngle=-45))
-        col = alt.Color("status:N", title=None, legend=alt.Legend(orient="top"),
-                        scale=alt.Scale(domain=[T["fwd_ordinary"], T["fwd_turn"], T["fwd_untested"]],
-                                        range=[BLUE, RED, MUTED]))
-        tt = [alt.Tooltip("date_s:N", title=T["tt_date"]), alt.Tooltip("h:Q", title=T["tt_h"]),
-              alt.Tooltip("f_s:N", title=T["tt_forecast"]), alt.Tooltip("range_s:N", title=T["tt_range"]),
-              alt.Tooltip("sofr_s:N", title=T["tt_sofr"]), alt.Tooltip("cov_s:N", title=T["tt_cov"]),
-              alt.Tooltip("status:N", title=T["tt_status"])]
-        op = alt.condition("datum.tested == 0", alt.value(0.45), alt.value(1.0))
-        rng = (alt.Chart(f).mark_rule(strokeWidth=5, opacity=0.35)
-               .encode(x=x, y=alt.Y("lo80_bp:Q", title=T["fwd_y"]), y2="hi80_bp:Q",
-                       color=col, tooltip=tt))
-        pts = (alt.Chart(f).mark_point(filled=True, size=70)
-               .encode(x=x, y="forecast_bp:Q", color=col, opacity=op, tooltip=tt))
-        marks = (alt.Chart(f[f["mark"] != ""]).mark_text(dy=-12, font=FONT, fontSize=11,
-                                                         fontWeight="bold", color=RED)
-                 .encode(x=x, y="hi80_bp:Q", text="mark:N"))
-        zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1).encode(y="y:Q")
-        st.altair_chart(style((rng + zero + pts + marks).properties(height=250)), width="stretch")
-        tested = int(f["tested_horizon"].iloc[0])
-        sc = pd.read_csv(PROC / "forward_backtest.csv").set_index(["h", "days"])["coverage80"]
+        y = alt.Y("y:Q", title=T["fwd_y_top"])
+        col = alt.Color("cat:N", title=None, legend=alt.Legend(orient="top", labelLimit=0, columns=1),
+                        scale=alt.Scale(domain=[T["fwd_ctx"], T["fwd_turnq"]], range=[MUTED, RED]))
+        tt_ctx = [alt.Tooltip("date_s:N", title=T["tt_date"]), alt.Tooltip("h:Q", title=T["tt_h"]),
+                  alt.Tooltip("y_s:N", title=T["fwd_y_top"]), alt.Tooltip("cat:N", title=T["tt_status"])]
+        ctx = f[f["kind"] == ""]
+        line = (alt.Chart(ctx).mark_line(strokeWidth=1.5, strokeDash=[4, 3], color=MUTED)
+                .encode(x=x, y=y, opacity=alt.value(0.7)))
+        dots = (alt.Chart(ctx).mark_point(filled=True, size=40)
+                .encode(x=x, y=y, color=col, tooltip=tt_ctx,
+                        opacity=alt.condition("datum.faded == 1", alt.value(0.3), alt.value(0.9))))
+        layers = line + dots
+        if len(tq):
+            tt_turn = [alt.Tooltip("date_s:N", title=T["tt_date"]), alt.Tooltip("h:Q", title=T["tt_h"]),
+                       alt.Tooltip("q_s:N", title=T["fwd_q_tt"]), alt.Tooltip("hz:Q", title=T["c_h"]),
+                       alt.Tooltip("cov_s:N", title=T["tt_cov"])]
+            bar = (alt.Chart(tq).mark_rule(strokeWidth=6, opacity=0.35, color=RED)
+                   .encode(x=x, y=alt.Y("q50:Q"), y2="q95:Q", tooltip=tt_turn))
+            tick = (alt.Chart(tq).mark_tick(thickness=2, size=16, color=RED)
+                    .encode(x=x, y="q90:Q", tooltip=tt_turn))
+            med = (alt.Chart(tq).mark_point(filled=True, size=80)
+                   .encode(x=x, y="q50:Q", color=col, tooltip=tt_turn))
+            lab = (alt.Chart(tq).mark_text(dy=-10, font=FONT, fontSize=11, fontWeight="bold", color=RED)
+                   .encode(x=x, y="q95:Q", text="mark:N"))
+            layers = layers + bar + tick + med + lab
+        top = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=MUTED, strokeWidth=1).encode(y="y:Q")
+        st.altair_chart(style((top + layers).properties(height=250)), width="stretch")
+
+        sc = pd.read_csv(PROC / "forward_backtest.csv")
+        turn = sc[sc["days"] == "turn days"]
+        other = sc[sc["days"] == "other days"].set_index("h")["r2_vs_ar1"]
         held = desk.long_date(LIVE_ROW["tga_date"], LANG) if LIVE_ROW is not None else "—"
-        st.caption(T["fwd_note"].format(t=tested, c1=n(100 * sc[(1, "other days")], 0),
-                                        ct=n(100 * sc[(tested, "other days")], 0),
-                                        cturn=n(100 * sc[(1, "turn days")], 0), date=held))
+        st.caption(T["fwd_caption"].format(
+            tmin=n(100 * turn["coverage80"].min(), 0), tmax=n(100 * turn["coverage80"].max(), 0),
+            r1=n(other[1], 3, sign=True), r5=n(other[5], 3, sign=True),
+            r10=n(other[10], 3, sign=True), days=CONTEXT_DAYS, date=held))
 
 
 def track_tile() -> None:

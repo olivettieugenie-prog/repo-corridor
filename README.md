@@ -87,7 +87,7 @@ The backtest runs this path from every out-of-sample date at 1, 2, 5, 10, 15 and
 | 20 | other | 1509 | 3.84 | 3.83 | −0.004 | 1253 | 69.8% |
 | 1 to 20 | turn | 76 to 77 | 4.13 to 6.05 | 4.42 to 6.22 | +0.05 to +0.13 | 63 to 65 | 56% to 63% |
 
-The path's range holds 70% to 90% of outcomes on ordinary days up to 15 settlement days, so the app greys days 16 to 20 and labels them untested. Beyond a day or two the path adds almost nothing to AR(1); its value is the calendar shape and the range. On turn days the range holds only 56% to 63%, which is why turns are priced with the turn quantiles below instead. Full table in `data/processed/forward_backtest.csv`, one row per date and horizon in `forward_paths.csv`.
+The path's range holds 70% to 90% of outcomes on ordinary days up to 15 settlement days, but beyond a day or two the path adds almost nothing to AR(1): R² against it is +0.019 at 1 day, +0.007 at 5 and −0.002 at 10. On turn days the range holds only 56% to 63%. So the calendar plots everything against the top of the target range and shows turn days with the calibrated turn quantiles at the matching horizon (median, 90th and 95th percentile), while ordinary days are a muted context line labelled "context, AR decay", faded beyond five days. Full table in `data/processed/forward_backtest.csv`, one row per date and horizon in `forward_paths.csv`.
 
 ## Turn quantiles
 

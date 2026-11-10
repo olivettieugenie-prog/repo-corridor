@@ -95,12 +95,13 @@ class LayoutTest(unittest.TestCase):
                     heads = [h.value for h in at.subheader]
                     self.assertEqual(heads[0], T["fwd_title"])
                     caps = " ".join(c.value for c in at.caption)
-                    self.assertIn(T["fwd_note"].split("{")[0], caps)
-                    self.assertIn("15", caps)                        # the tested horizon
+                    sc = pd.read_csv(ROOT / "data" / "processed" / "forward_backtest.csv")
+                    turn = sc[sc["days"] == "turn days"]["coverage80"]
+                    self.assertIn(T["fwd_caption"].split("{")[0], caps)
+                    self.assertIn(f"{round(100 * turn.min())}–{round(100 * turn.max())}", caps)
                     self.assertIn("download_dl_forward", [b.key for b in at.download_button])
-                    fwd = pd.read_csv(ROOT / "tests" / "fixtures" / "forward.csv")
-                    self.assertEqual(int((fwd["tested"] == 0).sum()), 5)      # days 16 to 20
-                    self.assertIn(T["fwd_note"].split("{t}")[0], caps)
+                    dl = [b for b in at.download_button if b.key == "download_dl_forward"]
+                    self.assertEqual(len(dl), 1)
 
     def test_forward_panel_without_a_path(self):
         os.environ["REPO_FORWARD_LOCAL"] = str(Path(self.tmp.name) / "none.csv")
