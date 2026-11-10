@@ -16,6 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+import pandas as pd  # noqa: E402
+
 import dashboard as db  # noqa: E402
 from i18n import LANGS, STRINGS  # noqa: E402
 
@@ -96,6 +98,9 @@ class LayoutTest(unittest.TestCase):
                     self.assertIn(T["fwd_note"].split("{")[0], caps)
                     self.assertIn("15", caps)                        # the tested horizon
                     self.assertIn("download_dl_forward", [b.key for b in at.download_button])
+                    fwd = pd.read_csv(ROOT / "tests" / "fixtures" / "forward.csv")
+                    self.assertEqual(int((fwd["tested"] == 0).sum()), 5)      # days 16 to 20
+                    self.assertIn(T["fwd_note"].split("{t}")[0], caps)
 
     def test_forward_panel_without_a_path(self):
         os.environ["REPO_FORWARD_LOCAL"] = str(Path(self.tmp.name) / "none.csv")

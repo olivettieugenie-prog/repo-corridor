@@ -93,6 +93,11 @@ class TurnsAppTest(unittest.TestCase):
                     txt = self.texts(at)
                     for key in ("calc_central", "calc_p90", "calc_be", "calc_be_p90"):
                         self.assertIn(T[key], txt)
+                    # The 30 November month-end is 15+ days out here, where the raw
+                    # median is kept: the dagger and its bias line must show.
+                    self.assertTrue(tab.iloc[0][T["tt_col_p50"]].endswith("†"))
+                    self.assertTrue(any(c.value.startswith(T["turns_raw_median"].split("{")[0])
+                                        for c in at.caption))
                     note = at.code[0].value
                     self.assertTrue(note.startswith(T["note_kind_month-end"]))
                     self.assertIn(T["client_line2"].split("{a}")[0].format(

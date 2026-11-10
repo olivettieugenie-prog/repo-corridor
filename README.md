@@ -25,6 +25,7 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
     python src/dm_test.py          # Diebold-Mariano test against AR(1)
     python src/intervals.py        # 80% intervals from past errors only
     python src/turn_quantiles.py   # turn-day quantiles, scored against baselines
+    python src/forward_backtest.py # the forward path, 1 to 20 days ahead
     python src/fetch_srf.py        # Standing Repo Facility take-up, rate check
     python src/backtest_carry.py   # the cash placement rule
     streamlit run app.py           # the app
@@ -49,7 +50,7 @@ The page switches between English and French from the control at the top right; 
 
     REPO_SKIP_FRED=1 python src/forecast_next.py
 
-`.github/workflows/daily.yml` runs it at 14:37 UTC on weekdays, with a backup run at 15:47 UTC; both sit off the busy start of the hour because GitHub delays or drops scheduled runs under load, which happened on 9 and 10 November 2026 with the cron at :30 (it also runs by hand through workflow_dispatch) and commits the log to the `data` branch, so main's history carries no daily commits. The app reads that file from GitHub, hourly, and falls back to the local copy.
+`.github/workflows/daily.yml` runs it at 14:37 UTC on weekdays, with a backup run at 15:47 UTC; both sit off the busy start of the hour because GitHub delays or drops scheduled runs under load, which happened on 9 and 10 November 2026 with the cron at :30 (it also runs by hand through workflow_dispatch) and commits the log and the 20-day forward path (`data/live/forward.csv`) to the `data` branch, so main's history carries no daily commits. The app reads both files from GitHub, hourly, and falls back to local copies.
 
 What exists when the job runs, on settlement day D at 9:37 a.m. ET (winter) or 10:37 a.m. ET (summer):
 
@@ -64,9 +65,27 @@ What exists when the job runs, on settlement day D at 9:37 a.m. ET (winter) or 1
 
 So the forecast for D is available only on the morning of D: the model needs SOFR for D−1, which the NY Fed publishes at 8:00 a.m. on D. It is a same-day nowcast of the rate that D's trades will set, not a decision made the evening before.
 
-The desk view at the top of the app shows the latest run: target date, the deviation forecast with its 80% range, the implied SOFR level, the calendar flags in play, ON RRP and TGA with their daily change, and a two-line note filled from a fixed template in `src/i18n.py` (`src/desk.py` holds the logic). The implied level is exact, not approximate: `build_dataset.py` defines the deviation as SOFR minus the top of the target range minus the trailing 60-day median of that spread, all known the day before, so SOFR = top of range + (median + deviation) / 100, which `tests/test_live.py` checks on every day of the data. The panel warns when the forecast targets a day more than one business day back, and shows the hit rate and RMSE against AR(1) once 20 target days have been scored; until then it shows when the live record began.
+The same-day call now sits in a small track-record tile beside the calculator: target date, the deviation forecast with its 80% range, the implied SOFR level, the latest scored forecasts with the running hit rate, and the two-line morning note from a fixed template in `src/i18n.py` (`src/desk.py` holds the logic). The implied level is exact, not approximate: `build_dataset.py` defines the deviation as SOFR minus the top of the target range minus the trailing 60-day median of that spread, all known the day before, so SOFR = top of range + (median + deviation) / 100, which `tests/test_live.py` checks on every day of the data. The tile warns when the forecast targets a day more than one business day back, and adds the RMSE against AR(1) once 20 target days have been scored.
 
 Business days follow the US government securities settlement calendar in `src/market_calendar.py`. It matches every SOFR publication date since April 2018. Against pandas' `USFederalHolidayCalendar` it adds Good Friday, keeps the Friday before a Saturday New Year's Day or Veterans Day open, starts Juneteenth in 2022, and adds the 5 December 2018 closure.
+
+## Forward pressure calendar
+
+The page opens on the next 20 settlement days. The daily job forecasts each day exactly as `src/forward_backtest.py` tests it: the AR(1) term iterated from today's deviation, plus the second-stage LASSO at that day's calendar flags, with the scarcity state (ON RRP, TGA, dispersion, volume) and the 60-day base held at today's values. Each day's 80% range comes from the last 250 walk-forward errors at the same horizon. Day 1 is the same-day call itself, which the job asserts.
+
+The backtest runs this path from every out-of-sample date at 1, 2, 5, 10, 15 and 20 settlement days and scores it against AR(1) iterated to the same horizon, with at h = 1 an exact match to the walk-forward forecasts:
+
+| h | days | n | RMSE model, bp | RMSE AR(1), bp | R² vs AR(1) | n interval | 80% coverage |
+|---|---|---|---|---|---|---|---|
+| 1 | other | 1528 | 1.78 | 1.80 | +0.019 | 1290 | 79.5% |
+| 2 | other | 1526 | 2.56 | 2.58 | +0.021 | 1287 | 73.7% |
+| 5 | other | 1523 | 3.14 | 3.15 | +0.007 | 1282 | 73.2% |
+| 10 | other | 1519 | 3.49 | 3.48 | −0.002 | 1272 | 70.7% |
+| 15 | other | 1514 | 3.69 | 3.69 | −0.001 | 1262 | 71.2% |
+| 20 | other | 1509 | 3.84 | 3.83 | −0.004 | 1253 | 69.8% |
+| 1 to 20 | turn | 76 to 77 | 4.13 to 6.05 | 4.42 to 6.22 | +0.05 to +0.13 | 63 to 65 | 56% to 63% |
+
+The path's range holds 70% to 90% of outcomes on ordinary days up to 15 settlement days, so the app greys days 16 to 20 and labels them untested. Beyond a day or two the path adds almost nothing to AR(1); its value is the calendar shape and the range. On turn days the range holds only 56% to 63%, which is why turns are priced with the turn quantiles below instead. Full table in `data/processed/forward_backtest.csv`, one row per date and horizon in `forward_paths.csv`.
 
 ## Turn quantiles
 
@@ -83,15 +102,34 @@ The app forecasts turns weeks ahead, so the model is re-scored with the state ta
 | 10 days | 77.5% | 95% | 85% | 97.5% |
 | 15 days | 72.5% | 90% | 77.5% | 97.5% |
 
-Calibration removes the under-coverage of the upper quantiles, and overshoots a little; pinball loss improves at some horizons and worsens at others, because a wider upper quantile costs loss on calm turns. Quarter-ends (16) were already covered at the upper quantiles. The median stays biased low: even after calibration, month-ends printed above it 52% to 65% of the time, depending on horizon. A finite-sample (n + 1) version of the shift is scored too and is far more conservative. Full table, by type, horizon and version, in `data/processed/turn_quantile_horizons.csv`; coefficients and current shifts per horizon in `turn_quantile_coefs_horizon.csv`. The app uses the calibrated quantiles at the horizon closest to the settlement days left until each turn (15 days for anything further out, since no longer horizon is scored), in the Next turns panel and for turn days in the calculator, and shows that horizon's walk-forward coverage beside each forecast.
+Calibration removes the under-coverage of the upper quantiles, and overshoots a little; pinball loss improves at some horizons and worsens at others, because a wider upper quantile costs loss on calm turns. Quarter-ends (16) were already covered at the upper quantiles. The median stays biased low: even after calibration, month-ends printed above it 52% to 65% of the time, depending on horizon. A finite-sample (n + 1) version of the shift is scored too and is far more conservative. Full table, by type, horizon and version, in `data/processed/turn_quantile_horizons.csv`; coefficients and current shifts per horizon in `turn_quantile_coefs_horizon.csv`. **Median bias.** The same shift applies to the median. Share of turns printing at or below it, out of sample:
+
+| type | horizon | n | raw | calibrated | used |
+|---|---|---|---|---|---|
+| month-end | 1 | 40 | 32.5% | 47.5% | calibrated |
+| month-end | 5 | 40 | 32.5% | 42.5% | calibrated |
+| month-end | 10 | 40 | 30.0% | 37.5% | calibrated |
+| month-end | 15 | 40 | 37.5% | 35.0% | raw |
+| quarter-end | 1 | 16 | 31.3% | 37.5% | calibrated |
+| quarter-end | 5 | 16 | 37.5% | 43.8% | calibrated |
+| quarter-end | 10 | 16 | 43.8% | 43.8% | raw |
+| quarter-end | 15 | 16 | 56.3% | 56.3% | raw |
+
+Where the shift does not bring the share closer to 50%, the raw median stays, and the app marks it with a dagger and states the bias next to the turn forecasts (`data/processed/turn_median_bias.csv`).
+
+The app uses the calibrated quantiles at the horizon closest to the settlement days left until each turn (15 days for anything further out, since no longer horizon is scored), in the Next turns panel and for turn days in the calculator, and shows that horizon's walk-forward coverage beside each forecast.
 
 ## Analog table
 
-`src/analogs.py` finds the 8 past turns of the same type whose scarcity state (lagged ON RRP, lagged TGA, trailing median spread) is closest to today's, by Euclidean distance after standardising each variable on data before the query date only. For each it shows what SOFR minus the top of the range printed and the 99th percentile of that day's SOFR trades. Year-ends are included and labelled history only. In the app each upcoming turn expands to its analog table.
+`src/analogs.py` finds the 8 past turns of the same type whose scarcity state (lagged ON RRP, lagged TGA, trailing median spread) is closest to today's, by Euclidean distance after standardising each variable on data before the query date only. For each it shows what SOFR minus the top of the range printed and the 99th percentile of that day's SOFR trades. Year-ends are included and labelled history only. In the app an analog picker under the Next turns table shows each upcoming turn's table.
+
+## Client note
+
+Under the Next turns table, two lines for a client, filled from a fixed template in English or French with the panel's own numbers, for example: "Month-end is in 14 settlement days (Mon 30 Nov 2026). Against the top of the target range the model expects about −6.7 bp, with 90% of outcomes at or below +5.8 bp. Past month-ends in similar conditions printed between −12 and +22 bp." The analog range comes from the 8 closest past turns. A year-end gets a history-only variant. The note sits in a code box with a copy button; nothing is generated freely (`desk.client_note`).
 
 ## Term-versus-roll calculator
 
-`src/roll_cost.py` prices rolling overnight across a window against a term repo quote. Each settlement day from `src/market_calendar.py` accrues to the next one, so a Friday carries the weekend, act/360 on both legs. Ordinary days follow the two-stage forecast and its AR(1) decay toward the trailing median; month- and quarter-ends use the turn quantiles. The app shows the expected roll, a stress case and the gap to the quote in bp, with a verdict from fixed templates. The stress case puts every day at its own 90th percentile at once, as if every day were bad together, so it is an upper reference rather than the 90th percentile of the average.
+`src/roll_cost.py` prices rolling overnight across a window against a term repo quote. Each settlement day from `src/market_calendar.py` accrues to the next one, so a Friday carries the weekend, act/360 on both legs. Ordinary days within the next 20 take the tested forward path; later ones follow the AR(1) decay toward the trailing median. Month- and quarter-ends use the turn quantiles, with the median rule above. The app shows the expected roll, a stress case and the gap to the quote in bp, with a verdict from fixed templates. The stress case puts every day at its own 90th percentile at once, as if every day were bad together, so it is an upper reference rather than the 90th percentile of the average.
 
 A window touching an FOMC decision or its effective day is not priced, because the cost depends on a policy path; meeting dates come from `data/fomc_meetings.csv`, sourced to the Fed's calendar. A window containing a year-end shows every past year-end print with its min, median and max, labelled history, not a forecast, prices the rest of the window, and reports the year-end print at which the quote would break even. `tests/test_roll.py` covers the day count, the averaging, turn days and these cases.
 
