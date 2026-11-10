@@ -122,8 +122,16 @@ def days_until(st: State, d) -> int:
     return len(business_days(as_of + pd.Timedelta(days=1), pd.Timestamp(d)))
 
 
+MEDIAN_BIAS = ROOT / "data" / "processed" / "turn_median_bias.csv"
+
+
+def median_policy() -> pd.DataFrame:
+    """Which (type, horizon) cells keep the raw median (turn_quantiles.py)."""
+    return pd.read_csv(MEDIAN_BIAS).set_index(["type", "horizon"])
+
+
 def turn_quantiles(coefs: pd.DataFrame, kind: str, scarcity: dict, base_bp: float,
-                   days_left: int | None = None) -> dict:
+                   days_left: int | None = None, policy: pd.DataFrame | None = None) -> dict:
     """q50, q90, q95 of SOFR minus top of range, bp, for a month- or quarter-end.
 
     With the per-horizon file (turn_quantile_coefs_horizon.csv) it uses the
@@ -136,9 +144,16 @@ def turn_quantiles(coefs: pd.DataFrame, kind: str, scarcity: dict, base_bp: floa
         h = horizon_for(1 if days_left is None else days_left, coefs["horizon"].unique())
         coefs = coefs[coefs["horizon"] == h]
         out["horizon"] = int(h)
-    shift = coefs["shift"] if "shift" in coefs.columns else 0.0
+    shift = (coefs["shift"].to_numpy(float).copy() if "shift" in coefs.columns
+             else np.zeros(len(coefs)))
+    if policy is not None and "horizon" in out:
+        row = policy.loc[(kind, out["horizon"])]
+        out["median_calibrated"] = bool(row["use_calibrated"])
+        out["median_at_or_below"] = float(row["at_or_below_used"])
+        if not row["use_calibrated"]:
+            shift[list(coefs["quantile"]).index("q50")] = 0.0   # keep the raw median
     q = [float(r["intercept"] + sum(r[f] * x[f] for f in FEATURES)) for _, r in coefs.iterrows()]
-    q = np.maximum.accumulate(np.asarray(q) + np.asarray(shift))
+    q = np.maximum.accumulate(np.asarray(q) + shift)
     out.update(zip(coefs["quantile"], q))
     return out
 
@@ -175,12 +190,13 @@ def day_rates(days: pd.DataFrame, st: State, coefs: pd.DataFrame) -> pd.DataFram
     """Central and 90th percentile rate, percent, for every day in the window."""
     out = days.copy()
     out["kind"] = [turn_kind(d) for d in out["date"]]
+    policy = median_policy() if "horizon" in coefs.columns and MEDIAN_BIAS.exists() else None
     steps = {d: i for i, d in enumerate(business_days(st.anchor_date, out["date"].max()))} \
         if len(out) else {}
     central, high = [], []
     for d, kind in zip(out["date"], out["kind"]):
         if kind in ("month-end", "quarter-end"):
-            q = turn_quantiles(coefs, kind, st.scarcity, st.base_bp, days_until(st, d))
+            q = turn_quantiles(coefs, kind, st.scarcity, st.base_bp, days_until(st, d), policy)
             central.append(st.target_hi + q["q50"] / 100)
             high.append(st.target_hi + q["q90"] / 100)
             continue

@@ -1,0 +1,9 @@
+type,horizon,n,at_or_below_calibrated,at_or_below_raw,use_calibrated,at_or_below_used
+month-end,1,40,0.475,0.325,True,0.475
+month-end,5,40,0.425,0.325,True,0.425
+month-end,10,40,0.375,0.3,True,0.375
+month-end,15,40,0.35,0.375,False,0.375
+quarter-end,1,16,0.375,0.3125,True,0.375
+quarter-end,5,16,0.4375,0.375,True,0.4375
+quarter-end,10,16,0.4375,0.4375,False,0.4375
+quarter-end,15,16,0.5625,0.5625,False,0.5625

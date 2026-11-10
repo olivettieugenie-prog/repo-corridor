@@ -160,6 +160,9 @@ STATE = roll_cost.build_state(daily, LIVE_ROW, oos)
 COEFS = pd.read_csv(PROC / "turn_quantile_coefs_horizon.csv")
 TSCORE = (pd.read_csv(PROC / "turn_quantile_horizons.csv")
           .query("version == 'calibrated'").set_index(["type", "horizon"]))
+# Where the conformal shift does not bring the median closer to 50% out of
+# sample, the raw median is kept and its bias is stated next to the table.
+POLICY = roll_cost.median_policy()
 
 
 def signed_style(v: str) -> str:
@@ -240,6 +243,9 @@ def analog_table(kind: str) -> None:
     show_table("dl_analogs", view, a, signed=[T["an_base"], T["an_print"], T["an_p99"]])
 
 
+RAW_MEDIANS: list[tuple[str, int, float]] = []   # (type, horizon, share at or below)
+
+
 def turns_table(turns) -> pd.DataFrame:
     """One row per upcoming turn, numbers formatted for the active language;
     the raw numbers go to TABLES for the CSV download."""
@@ -256,14 +262,19 @@ def turns_table(turns) -> pd.DataFrame:
                         T["tt_col_sofr95"]: dash, T["tt_col_cov"]: T["turns_ye_cell"],
                         T["tt_col_n"]: str(int((daily["year_end"] == 1).sum()))})
         else:
-            q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp, left)
+            q = roll_cost.turn_quantiles(COEFS, kind, STATE.scarcity, STATE.base_bp, left, POLICY)
             sc = TSCORE.loc[(kind, q["horizon"])]
+            if not q["median_calibrated"]:
+                RAW_MEDIANS.append((kind, q["horizon"], q["median_at_or_below"]))
             r.update(horizon=q["horizon"], q50_bp=q["q50"], q90_bp=q["q90"], q95_bp=q["q95"],
+                     median="raw" if not q["median_calibrated"] else "calibrated",
+                     median_at_or_below=q["median_at_or_below"],
                      sofr_at_q95_pct=STATE.target_hi + q["q95"] / 100,
                      cover_q50=sc["cover_q50"], cover_q90=sc["cover_q90"],
                      cover_q95=sc["cover_q95"], n=int(sc["n"]))
             row.update({
-                T["tt_col_p50"]: n(q["q50"], 1, sign=True),
+                T["tt_col_p50"]: n(q["q50"], 1, sign=True) + ("\u00a0†" if not q["median_calibrated"]
+                                                               else ""),
                 T["tt_col_p90"]: n(q["q90"], 1, sign=True),
                 T["tt_col_p95"]: n(q["q95"], 1, sign=True),
                 T["tt_col_sofr95"]: f"{n(STATE.target_hi + q['q95'] / 100, 2)}\u00a0%",
@@ -292,6 +303,9 @@ def turns_panel() -> None:
                    signed=[T["tt_col_p50"], T["tt_col_p90"], T["tt_col_p95"]], row_height=30,
                    column_config={T[k]: st.column_config.TextColumn(width=w)
                                   for k, w in widths.items()})
+        for kind, h, share in RAW_MEDIANS:
+            st.caption(T["turns_raw_median"].format(kinds=T[f"turns_{kind}"], h=h,
+                                                    above=n(100 * (1 - share), 0)))
         st.caption(T["turns_state"].format(rrp=n(STATE.scarcity["rrp_bn_lag1"], 1),
                                            tga=n(STATE.scarcity["tga_bn_lag1"], 0),
                                            base=n(STATE.base_bp, 1, sign=True)))

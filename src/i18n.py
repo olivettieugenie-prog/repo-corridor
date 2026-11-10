@@ -54,6 +54,10 @@ EN: dict[str, object] = {
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     # dashboard step 2: short captions, tables, method, footer
+    "turns_raw_median": (
+        "† Raw median: calibration did not reduce its bias at the {h}-day "
+        "horizon, where {above}% of past {kinds} printed above it."
+    ),
     "turns_state": (
         "State: ON RRP {rrp} bn, TGA {tga} bn, 60-day median {base} bp. "
         "Calibrated quantiles at the horizon closest to the days left."
@@ -567,6 +571,10 @@ FR: dict[str, object] = {
     "months": ["janv.", "févr.", "mars", "avr.", "mai", "juin",
                "juil.", "août", "sept.", "oct.", "nov.", "déc."],
     "weekdays": ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."],
+    "turns_raw_median": (
+        "† Médiane brute : la calibration n'a pas réduit son biais à l'horizon "
+        "de {h} jours, où {above} % des {kinds} passées se sont fixées au-dessus."
+    ),
     "turns_state": (
         "État : ON RRP {rrp} Md, TGA {tga} Md, médiane sur 60 jours {base} pb. "
         "Quantiles calibrés à l'horizon le plus proche des jours restants."

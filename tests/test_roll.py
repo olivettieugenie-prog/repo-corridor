@@ -103,9 +103,37 @@ class TestHorizons(unittest.TestCase):
     def test_calculator_uses_horizon_of_each_turn(self):
         st = state(anchor_date=pd.Timestamp("2026-11-09"))
         r = rc.day_rates(rc.roll_days("2026-11-27", "2026-12-02"), st, self.HCOEFS)
-        q = rc.turn_quantiles(self.HCOEFS, "month-end", st.scarcity, st.base_bp, 15)
+        q = rc.turn_quantiles(self.HCOEFS, "month-end", st.scarcity, st.base_bp, 15,
+                              rc.median_policy())
         row = r.set_index("date").loc[pd.Timestamp("2026-11-30")]
         self.assertAlmostEqual(row["central_pct"], st.target_hi + q["q50"] / 100)
+
+
+class TestMedianPolicy(unittest.TestCase):
+    HCOEFS = pd.read_csv(ROOT / "data" / "processed" / "turn_quantile_coefs_horizon.csv")
+
+    def test_rule_keeps_raw_unless_closer_to_half(self):
+        import turn_quantiles as tq
+        sc = pd.DataFrame([
+            {"type": "month-end", "horizon": 1, "n": 40, "version": "raw", "cover_q50": 0.30},
+            {"type": "month-end", "horizon": 1, "n": 40, "version": "calibrated", "cover_q50": 0.45},
+            {"type": "month-end", "horizon": 5, "n": 40, "version": "raw", "cover_q50": 0.40},
+            {"type": "month-end", "horizon": 5, "n": 40, "version": "calibrated", "cover_q50": 0.60},
+        ])
+        mb = tq.median_bias(sc).set_index("horizon")
+        self.assertTrue(mb.at[1, "use_calibrated"])
+        self.assertFalse(mb.at[5, "use_calibrated"])          # a tie keeps the raw median
+
+    def test_raw_median_drops_only_the_q50_shift(self):
+        st = state()
+        pol = rc.median_policy()
+        kind, h = next((k, h) for (k, h), r in pol.iterrows() if not r["use_calibrated"])
+        with_pol = rc.turn_quantiles(self.HCOEFS, kind, st.scarcity, st.base_bp, h, pol)
+        without = rc.turn_quantiles(self.HCOEFS, kind, st.scarcity, st.base_bp, h)
+        shift = self.HCOEFS[self.HCOEFS["horizon"] == h].set_index("quantile")["shift"]
+        self.assertFalse(with_pol["median_calibrated"])
+        self.assertAlmostEqual(with_pol["q50"], without["q50"] - shift["q50"])
+        self.assertAlmostEqual(with_pol["q90"], without["q90"])
 
 
 class TestBlockers(unittest.TestCase):

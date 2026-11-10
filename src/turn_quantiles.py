@@ -221,6 +221,23 @@ def horizon_coefs(t: pd.DataFrame, daily: pd.DataFrame, cal: pd.DataFrame) -> pd
     return pd.concat(out, ignore_index=True)
 
 
+def median_bias(scores: pd.DataFrame) -> pd.DataFrame:
+    """Share of turns printing at or below the median, raw and calibrated, by
+    type and horizon. The calibrated median is used only where the shift
+    brings that share closer to 50% out of sample; elsewhere the raw median
+    stays and the app states its bias."""
+    s = scores[scores["type"].isin(["month-end", "quarter-end"])
+               & scores["version"].isin(["raw", "calibrated"])]
+    t = (s.pivot_table(index=["type", "horizon", "n"], columns="version", values="cover_q50")
+         .reset_index().rename(columns={"raw": "at_or_below_raw",
+                                        "calibrated": "at_or_below_calibrated"}))
+    t["use_calibrated"] = ((t["at_or_below_calibrated"] - 0.5).abs()
+                           < (t["at_or_below_raw"] - 0.5).abs())
+    t["at_or_below_used"] = np.where(t["use_calibrated"], t["at_or_below_calibrated"],
+                                     t["at_or_below_raw"])
+    return t
+
+
 def walk_forward(t: pd.DataFrame) -> pd.DataFrame:
     """Model forecasts for every month-end and quarter-end, both variants."""
     pool = t[t["type"] != "year-end"].dropna(subset=STATE)
@@ -309,6 +326,8 @@ def main() -> int:
     hs = score_horizons(hz)
     hs.to_csv(PROC / "turn_quantile_horizons.csv", index=False)
     horizon_coefs(t, daily, hz).to_csv(PROC / "turn_quantile_coefs_horizon.csv", index=False)
+    mb = median_bias(hs)
+    mb.to_csv(PROC / "turn_median_bias.csv", index=False)
 
     with pd.option_context("display.width", 220, "display.max_columns", 30):
         print(sc.round(3).to_string(index=False))
@@ -317,6 +336,8 @@ def main() -> int:
     with pd.option_context("display.width", 220, "display.max_columns", 30):
         print("\nby horizon, raw and calibrated:")
         print(hs.round(3).to_string(index=False))
+        print("\nshare of turns at or below the median:")
+        print(mb.round(3).to_string(index=False))
     print(f"wrote {PROC / 'turn_quantiles.csv'} and turn_quantile_scores.csv, "
           "turn_quantiles_horizon.csv, turn_quantile_horizons.csv, "
           "turn_quantile_coefs_horizon.csv")
