@@ -5,9 +5,15 @@ name: Daily forecast
 # 9:00 a.m. ET) are published in both. GitHub may start a scheduled run late,
 # never early. On a settlement holiday no new SOFR exists, so the run repeats
 # the previous target and the app keeps the latest row per target date.
+#
+# 15:30 UTC is a backup: the first scheduled day (9 November 2026) started
+# nine hours late. If both slots run, the second appends a duplicate row for
+# the same target, which the app ignores (latest run per target date), and
+# the concurrency group below keeps the two from overlapping.
 on:
   schedule:
     - cron: "30 14 * * 1-5"
+    - cron: "30 15 * * 1-5"
   workflow_dispatch:
 
 permissions:

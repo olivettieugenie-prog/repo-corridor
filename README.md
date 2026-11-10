@@ -49,7 +49,7 @@ The page switches between English and French from the control at the top right; 
 
     REPO_SKIP_FRED=1 python src/forecast_next.py
 
-`.github/workflows/daily.yml` runs it at 14:30 UTC on weekdays (and by hand through workflow_dispatch) and commits the log to the `data` branch, so main's history carries no daily commits. The app reads that file from GitHub, hourly, and falls back to the local copy.
+`.github/workflows/daily.yml` runs it at 14:30 UTC on weekdays, with a backup run at 15:30 UTC because GitHub can start scheduled runs hours late (and by hand through workflow_dispatch) and commits the log to the `data` branch, so main's history carries no daily commits. The app reads that file from GitHub, hourly, and falls back to the local copy.
 
 What exists when the job runs, on settlement day D at 9:30 a.m. ET (winter) or 10:30 a.m. ET (summer):
 
