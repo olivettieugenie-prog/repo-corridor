@@ -19,8 +19,8 @@ What it does, in order
      of every earlier row whose target date has since been published.
 
 Timing: what exists when the job runs
-  The workflow runs at 14:30 UTC on weekdays, 9:30 a.m. ET in winter and
-  10:30 a.m. ET in summer. At that hour, on business day D:
+  The workflow runs at 14:37 UTC on weekdays (backup 15:47), 9:37 a.m. ET in
+  winter and 10:37 a.m. ET in summer. At that hour, on business day D:
     SOFR for D-1   published about 8:00 a.m. ET on D (revisable about 2:30 p.m.)
     EFFR for D-1   published about 9:00 a.m. ET on D, with the target range
     ON RRP for D-1 operation closes 1:15 p.m. ET on D-1, results the same day

@@ -49,9 +49,9 @@ The page switches between English and French from the control at the top right; 
 
     REPO_SKIP_FRED=1 python src/forecast_next.py
 
-`.github/workflows/daily.yml` runs it at 14:30 UTC on weekdays, with a backup run at 15:30 UTC because GitHub can start scheduled runs hours late (and by hand through workflow_dispatch) and commits the log to the `data` branch, so main's history carries no daily commits. The app reads that file from GitHub, hourly, and falls back to the local copy.
+`.github/workflows/daily.yml` runs it at 14:37 UTC on weekdays, with a backup run at 15:47 UTC; both sit off the busy start of the hour because GitHub delays or drops scheduled runs under load, which happened on 9 and 10 November 2026 with the cron at :30 (it also runs by hand through workflow_dispatch) and commits the log to the `data` branch, so main's history carries no daily commits. The app reads that file from GitHub, hourly, and falls back to the local copy.
 
-What exists when the job runs, on settlement day D at 9:30 a.m. ET (winter) or 10:30 a.m. ET (summer):
+What exists when the job runs, on settlement day D at 9:37 a.m. ET (winter) or 10:37 a.m. ET (summer):
 
 | series | source | published | latest at run time | used by the model as |
 |---|---|---|---|---|

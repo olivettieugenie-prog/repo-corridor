@@ -230,8 +230,8 @@ EN: dict[str, object] = {
     "hdr_asof_nolive": "Rates to {rates} · balances to {bal} · no live forecast yet",
     "hdr_delay": (
         "Data delay: SOFR and EFFR publish the next business day at about 8:00 "
-        "and 9:00 ET, the TGA a day later; the forecast job runs at 14:30 UTC, "
-        "with a backup at 15:30."
+        "and 9:00 ET, the TGA a day later; the forecast job runs at 14:37 UTC, "
+        "with a backup at 15:47."
     ),
     "about_title": "About this page",
     "nav_label": "Sections",
@@ -801,7 +801,7 @@ FR: dict[str, object] = {
     "hdr_delay": (
         "Délai des données : SOFR et EFFR sont publiés le jour ouvré suivant "
         "vers 8 h et 9 h (heure de New York), le TGA un jour plus tard ; la "
-        "tâche de prévision tourne à 14 h 30 UTC, avec une reprise à 15 h 30."
+        "tâche de prévision tourne à 14 h 37 UTC, avec une reprise à 15 h 47."
     ),
     "about_title": "À propos de cette page",
     "nav_label": "Sections",
