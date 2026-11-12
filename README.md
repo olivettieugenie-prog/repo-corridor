@@ -121,6 +121,67 @@ Where the shift does not bring the share closer to 50%, the raw median stays, an
 
 The app uses the calibrated quantiles at the horizon closest to the settlement days left until each turn (15 days for anything further out, since no longer horizon is scored), in the Next turns panel and for turn days in the calculator, and shows that horizon's walk-forward coverage beside each forecast.
 
+## Naive benchmark
+
+Every evaluation is also scored against two baselines that need no model: naive, the last value known when the forecast is made (yesterday's deviation carried forward, the `naive` column of `oos_predictions.csv`), and, for turn days, previous turn, the value printed on the last turn of any type.
+
+**One day ahead** (`dm_test_naive.csv`; RMSE in bp; Diebold-Mariano with HAC variance and the Harvey-Leybourne-Newbold correction; negative statistic: the forecaster wins):
+
+| group | n | model | naive | DM | p | AR(1) | DM vs naive | p |
+|---|---|---|---|---|---|---|---|---|
+| all | 1605 | 1.96 | 2.06 | −1.40 | 0.16 | 2.01 | −1.24 | 0.22 |
+| 2024+ | 703 | 2.62 | 2.94 | −3.77 | 0.0002 | 2.80 | −2.68 | 0.008 |
+| 2020 | 155 | 2.01 | 0.95 | +4.20 | <0.0001 | 1.19 | +2.36 | 0.020 |
+| 2021 | 249 | 1.10 | 0.72 | +3.15 | 0.002 | 1.06 | +3.14 | 0.002 |
+| 2022 | 249 | 0.85 | 0.86 | −0.89 | 0.37 | 0.85 | −0.89 | 0.37 |
+| 2023 | 249 | 1.01 | 1.04 | −0.98 | 0.33 | 1.01 | −2.01 | 0.045 |
+| 2024 | 250 | 2.29 | 2.55 | −2.50 | 0.013 | 2.38 | −2.28 | 0.023 |
+| 2025 | 249 | 3.20 | 3.64 | −2.72 | 0.007 | 3.51 | −1.41 | 0.16 |
+| 2026 | 204 | 2.16 | 2.35 | −1.32 | 0.19 | 2.25 | −0.84 | 0.40 |
+| turn days | 77 | 4.13 | 4.11 | +0.03 | 0.98 | 4.42 | +1.39 | 0.17 |
+| other days | 1528 | 1.78 | 1.89 | −1.79 | 0.07 | 1.80 | −1.69 | 0.09 |
+
+On turn days the model also beats previous turn, 4.13 against 5.07 bp (p = 0.10).
+
+**Forward path by horizon** (`forward_backtest_naive.csv`; RMSE in bp; naive holds today's deviation flat):
+
+| h | other days: model / naive | R² vs naive | turn days: model / naive / previous turn | R² vs naive |
+|---|---|---|---|---|
+| 1 | 1.78 / 1.89 | +0.11 | 4.13 / 4.11 / 5.07 | −0.01 |
+| 2 | 2.56 / 2.86 | +0.20 | 4.32 / 3.67 / 5.07 | −0.38 |
+| 5 | 3.14 / 3.59 | +0.24 | 5.46 / 6.37 / 5.07 | +0.27 |
+| 10 | 3.49 / 3.70 | +0.11 | 5.60 / 5.29 / 5.16 | −0.12 |
+| 15 | 3.69 / 4.13 | +0.20 | 5.88 / 6.11 / 5.16 | +0.08 |
+| 20 | 3.84 / 3.64 | −0.11 | 6.05 / 4.95 / 5.82 | −0.50 |
+
+**Turn medians** (`turn_naive_median.csv`; mean absolute error in bp; naive is SOFR minus the top of the range on the forecast date; "model" is the median the app uses):
+
+| type | h | n | model | naive | previous turn |
+|---|---|---|---|---|---|
+| month-end | 1 | 40 | 3.02 | 2.30 | 3.82 |
+| month-end | 5 | 40 | 3.44 | 3.93 | 3.82 |
+| month-end | 10 | 40 | 3.51 | 3.18 | 3.82 |
+| month-end | 15 | 40 | 3.70 | 3.95 | 3.82 |
+| quarter-end | 1 | 16 | 3.11 | 4.00 | 4.44 |
+| quarter-end | 5 | 16 | 3.49 | 5.69 | 4.44 |
+| quarter-end | 10 | 16 | 3.81 | 4.75 | 4.44 |
+| quarter-end | 15 | 16 | 4.16 | 4.81 | 4.44 |
+
+**Turn ranges** (`turn_naive_ranges.csv`): the naive range is naive plus the 5th to 95th percentiles of past naive errors at the same horizon, from turns already printed. Pinball loss in bp and the share of turns at or below the 90th percentile (target 90%):
+
+| type | h | pinball p90: calibrated / naive | at or below p90: calibrated / naive | naive two-sided 80% coverage |
+|---|---|---|---|---|
+| month-end | 1 | 1.14 / 0.81 | 98% / 78% | 73% |
+| month-end | 5 | 1.29 / 1.31 | 95% / 73% | 68% |
+| month-end | 10 | 1.36 / 1.05 | 95% / 80% | 75% |
+| month-end | 15 | 1.36 / 1.50 | 90% / 65% | 63% |
+| quarter-end | 1 | 1.18 / 1.59 | 94% / 50% | 38% |
+| quarter-end | 5 | 1.30 / 2.25 | 100% / 50% | 44% |
+| quarter-end | 10 | 1.43 / 2.27 | 100% / 56% | 50% |
+| quarter-end | 15 | 1.33 / 2.02 | 94% / 63% | 56% |
+
+Where the model loses to naive, plainly: one day ahead in 2020 and 2021, significantly (RMSE 2.01 against 0.95 bp in 2020, 1.10 against 0.72 in 2021), so its full-period gain over naive is not significant (p = 0.16) and it only wins clearly from 2024; on turn days one day ahead it ties naive; the forward path loses to naive on turn days at 2 and 10 days and everywhere at 20 days; and the turn median loses to naive on month-ends at short horizons, 3.02 against 2.30 bp at one day and 3.51 against 3.18 at ten. The naive range also has lower pinball loss on month-ends at 1 and 10 days, though it covers only 73% to 80% at its 90th percentile where the calibrated range covers 95% to 98%. On quarter-ends the calibrated quantiles beat naive at every horizon on both the median and the range. In the app, every comparison table in the Model section starts with the naive row, and a caption under Next turns says whether the calibrated range beats the naive one at the first turn's horizon.
+
 ## Analog table
 
 `src/analogs.py` finds the 8 past turns of the same type whose scarcity state (lagged ON RRP, lagged TGA, trailing median spread) is closest to today's, by Euclidean distance after standardising each variable on data before the query date only. For each it shows what SOFR minus the top of the range printed and the 99th percentile of that day's SOFR trades. Year-ends are included and labelled history only. In the app an analog picker under the Next turns table shows each upcoming turn's table.
