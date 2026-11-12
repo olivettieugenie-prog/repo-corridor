@@ -787,7 +787,9 @@ with t1:
     show_table("dl_r2", r2_view, rmse_raw)
 with t2:
     st.markdown(f"**{T['tb_dm']}**")
-    show_table("dl_dm", dm_view, dm_long, signed=[T["c_r2_bench"], T["c_hln"]], height=320)
+    # Only R² is coloured: a negative DM statistic means the model wins, so a
+    # red/blue sign colour would read backwards there.
+    show_table("dl_dm", dm_view, dm_long, signed=[T["c_r2_bench"]], height=320)
 t3, t4 = st.columns(2)
 with t3:
     st.markdown(f"**{T['tb_cov']}**")
