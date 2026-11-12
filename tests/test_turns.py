@@ -97,3 +97,46 @@ class TestAnalogs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNaiveBenchmarks(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.t = tq.turn_days(DAILY)
+        cls.hz = tq.walk_forward_horizon(tq.horizon_turns(cls.t, DAILY, 5), 5)
+
+    def test_naive_is_the_spread_on_the_forecast_date(self):
+        nz = tq.add_naive(self.hz, DAILY, self.t)
+        spread = DAILY.set_index("date")["spread_hi_bp"]
+        np.testing.assert_allclose(nz["naive"], nz["made_date"].map(spread))
+
+    def test_previous_turn_is_known_on_the_forecast_date(self):
+        nz = tq.add_naive(self.hz, DAILY, self.t)
+        turns = self.t.set_index("date")["y"]
+        for _, r in nz.dropna(subset=["prev_turn"]).sample(10, random_state=0).iterrows():
+            known = turns[turns.index <= r["made_date"]]
+            self.assertEqual(r["prev_turn"], known.iloc[-1])
+
+    def test_naive_range_ignores_turns_not_yet_printed(self):
+        nz = tq.add_naive(self.hz, DAILY, self.t)
+        a = tq.naive_ranges(nz)
+        cut = nz["date"].iloc[30]
+        bumped = nz.copy()
+        bumped.loc[bumped["date"] > cut, "y"] += 300
+        b = tq.naive_ranges(bumped)
+        keep = a["date"] <= cut
+        np.testing.assert_allclose(a.loc[keep, "nq90"], b.loc[keep, "nq90"], equal_nan=True)
+
+
+class TestNaiveDM(unittest.TestCase):
+    def test_groups_and_previous_turn(self):
+        import dm_test as dmt
+        oos = pd.read_csv(ROOT / "data" / "processed" / "oos_predictions.csv", parse_dates=["date"])
+        nv = dmt.naive_table(oos, DAILY)
+        n = nv[(nv["forecaster"] == "model") & (nv["benchmark"] == "naive")].set_index("group")["n"]
+        self.assertEqual(n["all"], n["turn days"] + n["other days"])
+        self.assertEqual(set(nv[nv["benchmark"] == "previous turn"]["group"]), {"turn days"})
+        pt = dmt.previous_turn(oos, DAILY)
+        turns = DAILY[DAILY["month_end"] == 1].set_index("date")["dev_w_bp"]
+        d = oos["date"].iloc[400]
+        self.assertEqual(pt.iloc[400], turns[turns.index < d].iloc[-1])

@@ -22,6 +22,11 @@ For every out-of-sample forecast date t and h in 1, 2, 5, 10, 15, 20:
 The target day's rate_change flag is the realised one, as in model_lasso.py;
 the app reads it from the FOMC table instead.
 
+Naive benchmarks (forward_backtest_naive.csv): naive holds today's deviation
+flat to every horizon (at h = 1 it is the naive column of oos_predictions.csv);
+previous turn, scored on turn days, is the deviation printed on the last turn
+of any type known on the forecast date.
+
 Scores by horizon, for turn days (month_end flag on the target day) and other
 days: n, RMSE of the model and of iterated AR(1), R² against AR(1), and 80%
 coverage. Writes data/processed/forward_backtest.csv (scores) and
@@ -71,6 +76,7 @@ def paths(daily: pd.DataFrame, horizons=HORIZONS) -> pd.DataFrame:
     spread = d.set_index("date")["spread_hi_bp"]
     base_next = d.set_index("date")["base_bp"]          # base at t+1: median up to t
     month_end = d.set_index("date")["month_end"]
+    turn_dev = d[d["month_end"] == 1].set_index("date")["dev_w_bp"].dropna()
 
     rows = []
     start = m.TRAIN_MIN
@@ -99,8 +105,11 @@ def paths(daily: pd.DataFrame, horizons=HORIZONS) -> pd.DataFrame:
                     ar = c + phi * ar
                 f = ar + float(st2.predict((xh.to_numpy(float) - mu) / sd)[0])
                 actual = float(np.clip(spread[target] - base, -m.WINSOR_BP, m.WINSOR_BP))
+                known = turn_dev[turn_dev.index <= t]
                 rows.append({"asof": t, "target": target, "h": h, "turn": int(month_end[target] == 1),
-                             "y": actual, "f": f, "ar1": ar, "base_bp": base})
+                             "y": actual, "f": f, "ar1": ar, "base_bp": base,
+                             "naive": dev0,
+                             "prev_turn": float(known.iloc[-1]) if len(known) else np.nan})
         start = stop
     return pd.DataFrame(rows)
 
@@ -143,6 +152,24 @@ def nearest_scored(h: int, scored=HORIZONS) -> int:
     return min(sorted(scored), key=lambda s: abs(s - h))
 
 
+def naive_scores(p: pd.DataFrame) -> pd.DataFrame:
+    rmse = lambda e: float(np.sqrt(np.mean(np.square(e))))  # noqa: E731
+    rows = []
+    for h, g in p.groupby("h"):
+        for label, s in (("all", g), ("turn days", g[g["turn"] == 1]), ("other days", g[g["turn"] == 0])):
+            r = {"h": h, "days": label, "n": len(s),
+                 "rmse_model_bp": rmse(s["y"] - s["f"]), "rmse_ar1_bp": rmse(s["y"] - s["ar1"]),
+                 "rmse_naive_bp": rmse(s["y"] - s["naive"])}
+            r["r2_model_vs_naive"] = 1 - r["rmse_model_bp"] ** 2 / r["rmse_naive_bp"] ** 2
+            r["r2_ar1_vs_naive"] = 1 - r["rmse_ar1_bp"] ** 2 / r["rmse_naive_bp"] ** 2
+            if label == "turn days":
+                t = s.dropna(subset=["prev_turn"])
+                r["rmse_prev_turn_bp"] = rmse(t["y"] - t["prev_turn"])
+                r["r2_model_vs_prev_turn"] = 1 - rmse(t["y"] - t["f"]) ** 2 / r["rmse_prev_turn_bp"] ** 2
+            rows.append(r)
+    return pd.DataFrame(rows)
+
+
 def tested_horizon(sc: pd.DataFrame, days: str = "other days") -> int:
     """Longest horizon h such that coverage at h and every shorter horizon
     stays within the 70-90% band."""
@@ -165,8 +192,14 @@ def main() -> int:
     assert np.allclose(h1["f"], h1["two_stage"], atol=1e-8), "h=1 path differs from two_stage"
     assert np.allclose(h1["y_x"], h1["y_y"]), "h=1 target differs from the model's target"
     p.to_csv(PROC / "forward_paths.csv", index=False)
+    h1n = p[p["h"] == 1].merge(oos[["date", "naive"]], left_on="target", right_on="date")
+    assert np.allclose(h1n["naive_x"], h1n["naive_y"]), "h=1 naive differs from oos naive"
     sc = scores(p)
     sc.to_csv(PROC / "forward_backtest.csv", index=False)
+    nv = naive_scores(p)
+    nv.to_csv(PROC / "forward_backtest_naive.csv", index=False)
+    with pd.option_context("display.width", 220):
+        print(nv.round(3).to_string(index=False))
     with pd.option_context("display.width", 200):
         print(sc.round(3).to_string(index=False))
     print(f"\nlongest tested horizon (other days, coverage within 70-90% at every "

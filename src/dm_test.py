@@ -23,6 +23,13 @@ variance, not from HLN.
 
 Writes data/processed/dm_test.csv with one row for the full period, one for
 2024 onwards and one per calendar year.
+
+Naive benchmarks (dm_test_naive.csv): the same test for the model against
+naive and for AR(1) against naive, where naive is today's deviation carried
+to tomorrow (the naive column of oos_predictions.csv), for the full period,
+2024 onwards, each year, turn days and other days. On turn days a second
+baseline, previous turn, is the deviation printed on the last earlier turn
+of any type; model and AR(1) are tested against it too.
 """
 from __future__ import annotations
 
@@ -108,10 +115,53 @@ def table(oos: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def previous_turn(oos: pd.DataFrame, daily: pd.DataFrame) -> pd.Series:
+    """For each date, the deviation (winsorised, as the target) printed on the
+    last turn strictly before it. Turns are the month_end flag, any type."""
+    d = daily.sort_values("date")
+    turns = d[d["month_end"] == 1][["date", "dev_w_bp"]].dropna()
+    turns = turns.rename(columns={"date": "turn_date", "dev_w_bp": "prev_turn"})
+    m = pd.merge_asof(oos[["date"]].sort_values("date"), turns, left_on="date",
+                      right_on="turn_date", direction="backward", allow_exact_matches=False)
+    return m.set_index(oos.sort_values("date").index)["prev_turn"].reindex(oos.index)
+
+
+def naive_table(oos: pd.DataFrame, daily: pd.DataFrame) -> pd.DataFrame:
+    o = oos.copy()
+    flags = daily.set_index("date")["month_end"]
+    o["turn"] = o["date"].map(flags).fillna(0).astype(int)
+    o["prev_turn"] = previous_turn(o, daily)
+    groups = [("all", o), ("2024+", o[o["date"].dt.year >= 2024])]
+    groups += [(str(yr), g) for yr, g in o.groupby(o["date"].dt.year)]
+    groups += [("turn days", o[o["turn"] == 1]), ("other days", o[o["turn"] == 0])]
+    pairs = [("model", "two_stage", "naive", "naive"), ("AR(1)", "ar1", "naive", "naive")]
+    rows = []
+    for label, g in groups:
+        todo = pairs + ([("model", "two_stage", "previous turn", "prev_turn"),
+                         ("AR(1)", "ar1", "previous turn", "prev_turn")]
+                        if label == "turn days" else [])
+        for name, fcol, bname, bcol in todo:
+            h = g.dropna(subset=[bcol])
+            r = dm(h["y"].to_numpy(float), h[fcol].to_numpy(float), h[bcol].to_numpy(float))
+            rows.append({"group": label, "forecaster": name, "benchmark": bname,
+                         "start": h["date"].min().date(), "end": h["date"].max().date(),
+                         "n": r["n"], "rmse_forecaster_bp": r["rmse_model_bp"],
+                         "rmse_benchmark_bp": r["rmse_ar1_bp"],
+                         "r2_vs_benchmark": r["r2_vs_ar1"], "nw_lag": r["nw_lag"],
+                         "hln_stat": r["hln_stat"], "p_two_sided": r["p_two_sided"],
+                         "p_forecaster_better": r["p_model_better"], "note": r["note"]})
+    return pd.DataFrame(rows)
+
+
 def main() -> int:
     oos = pd.read_csv(PROC / "oos_predictions.csv", parse_dates=["date"])
+    daily = pd.read_csv(PROC / "daily.csv", parse_dates=["date"])
     out = table(oos)
     out.to_csv(PROC / "dm_test.csv", index=False)
+    nv = naive_table(oos, daily)
+    nv.to_csv(PROC / "dm_test_naive.csv", index=False)
+    with pd.option_context("display.width", 220, "display.max_columns", 20):
+        print(nv.drop(columns=["start", "end", "nw_lag", "note"]).round(4).to_string(index=False))
     with pd.option_context("display.width", 200, "display.max_columns", 20):
         print(out.round(4).to_string(index=False))
     print(f"\nwrote {PROC / 'dm_test.csv'}")

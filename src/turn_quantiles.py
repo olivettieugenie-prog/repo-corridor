@@ -37,6 +37,19 @@ month-end and quarter-end so far and writes the coefficients, in raw units,
 to data/processed/turn_quantile_coefs.csv: the app evaluates them with numpy,
 so it needs no scikit-learn at runtime.
 
+Naive benchmarks, on the same turns and horizons as the calibrated scores:
+    naive          SOFR minus the top of the range on the forecast date, the
+                   last value known when the forecast is made
+    previous turn  the same on the last turn of any type (year-ends included)
+                   printed by the forecast date
+turn_naive_median.csv compares the medians by mean absolute error: raw and
+calibrated model medians, the median the app uses (turn_median_bias.csv),
+naive and previous turn. turn_naive_ranges.csv builds a naive range, naive
+plus the 5th, 10th, 50th, 90th and 95th percentiles of past naive errors at the
+same horizon on turns already printed (at least 12), and scores it against the
+calibrated model at 50, 90 and 95% (pinball loss and the share printing at or
+below), with the naive two-sided 80% and 90% coverage alongside.
+
 Horizon and calibration
     The app forecasts turns weeks ahead, so the model is re-scored with the
     scarcity state taken h settlement days before each turn, h = 1 (the day
@@ -238,6 +251,68 @@ def median_bias(scores: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
+NAIVE_TAUS = (0.05, 0.10, 0.50, 0.90, 0.95)
+
+
+def add_naive(hz: pd.DataFrame, daily: pd.DataFrame, t: pd.DataFrame) -> pd.DataFrame:
+    """Naive and previous-turn values for every turn forecast."""
+    spread = daily.set_index("date")["spread_hi_bp"]
+    all_turns = t[["date", "y"]].dropna().sort_values("date")
+    out = hz.copy()
+    out["naive"] = out["made_date"].map(spread)
+    prev = pd.merge_asof(out[["made_date"]].sort_values("made_date"),
+                         all_turns.rename(columns={"date": "prev_date", "y": "prev_turn"}),
+                         left_on="made_date", right_on="prev_date", direction="backward")
+    out.loc[out.sort_values("made_date").index, "prev_turn"] = prev["prev_turn"].to_numpy()
+    return out
+
+
+def naive_ranges(hz: pd.DataFrame) -> pd.DataFrame:
+    """Naive plus quantiles of past naive errors, per horizon, earlier turns only."""
+    rows = []
+    for h, g in hz.groupby("horizon"):
+        g = g.sort_values("date").reset_index(drop=True)
+        for i, r in g.iterrows():
+            past = g[g["date"] <= r["made_date"]]
+            if len(past) < MIN_CAL:
+                continue
+            e = (past["y"] - past["naive"]).to_numpy()
+            q = r["naive"] + np.quantile(e, NAIVE_TAUS)
+            rows.append({"date": r["date"], "horizon": h,
+                         **{f"nq{int(round(tau * 100)):02d}": v for tau, v in zip(NAIVE_TAUS, q)}})
+    return hz.merge(pd.DataFrame(rows), on=["date", "horizon"], how="left")
+
+
+def naive_scores(hz: pd.DataFrame, policy: pd.DataFrame):
+    f = hz.dropna(subset=["q50_cal", "nq50", "naive", "prev_turn"])
+    common = set.intersection(*(set(g["date"]) for _, g in f.groupby("horizon")))
+    f = f[f["date"].isin(common)].copy()
+    use = f.apply(lambda r: policy.loc[(r["type"], r["horizon"]), "use_calibrated"], axis=1)
+    f["q50_used"] = np.where(use, f["q50_cal"], f["q50"])
+    med, rng = [], []
+    for typ in ("month-end", "quarter-end", "all"):
+        for h, g in f.groupby("horizon"):
+            g = g if typ == "all" else g[g["type"] == typ]
+            y = g["y"].to_numpy()
+            mae = lambda c: float(np.mean(np.abs(y - g[c].to_numpy())))  # noqa: E731
+            med.append({"type": typ, "horizon": h, "n": len(g),
+                        "mae_model_raw_bp": mae("q50"), "mae_model_cal_bp": mae("q50_cal"),
+                        "mae_model_used_bp": mae("q50_used"), "mae_naive_bp": mae("naive"),
+                        "mae_prev_turn_bp": mae("prev_turn")})
+            for method, cols in (("calibrated model", ("q50_cal", "q90_cal", "q95_cal")),
+                                 ("naive range", ("nq50", "nq90", "nq95"))):
+                row = {"type": typ, "horizon": h, "method": method, "n": len(g)}
+                for c, tau in zip(cols, TAUS):
+                    k = int(round(tau * 100))
+                    row[f"pinball_q{k}"] = pinball(y, g[c].to_numpy(), tau)
+                    row[f"at_or_below_q{k}"] = float((y <= g[c]).mean())
+                if method == "naive range":
+                    row["cover80_two_sided"] = float(((y >= g["nq10"]) & (y <= g["nq90"])).mean())
+                    row["cover90_two_sided"] = float(((y >= g["nq05"]) & (y <= g["nq95"])).mean())
+                rng.append(row)
+    return pd.DataFrame(med), pd.DataFrame(rng)
+
+
 def walk_forward(t: pd.DataFrame) -> pd.DataFrame:
     """Model forecasts for every month-end and quarter-end, both variants."""
     pool = t[t["type"] != "year-end"].dropna(subset=STATE)
@@ -328,6 +403,10 @@ def main() -> int:
     horizon_coefs(t, daily, hz).to_csv(PROC / "turn_quantile_coefs_horizon.csv", index=False)
     mb = median_bias(hs)
     mb.to_csv(PROC / "turn_median_bias.csv", index=False)
+    nz = naive_ranges(add_naive(hz, daily, t))
+    nmed, nrng = naive_scores(nz, mb.set_index(["type", "horizon"]))
+    nmed.to_csv(PROC / "turn_naive_median.csv", index=False)
+    nrng.to_csv(PROC / "turn_naive_ranges.csv", index=False)
 
     with pd.option_context("display.width", 220, "display.max_columns", 30):
         print(sc.round(3).to_string(index=False))
@@ -338,6 +417,10 @@ def main() -> int:
         print(hs.round(3).to_string(index=False))
         print("\nshare of turns at or below the median:")
         print(mb.round(3).to_string(index=False))
+        print("\nturn medians against naive and previous turn (MAE, bp):")
+        print(nmed.round(2).to_string(index=False))
+        print("\ncalibrated model against the naive range:")
+        print(nrng.round(3).to_string(index=False))
     print(f"wrote {PROC / 'turn_quantiles.csv'} and turn_quantile_scores.csv, "
           "turn_quantiles_horizon.csv, turn_quantile_horizons.csv, "
           "turn_quantile_coefs_horizon.csv")
