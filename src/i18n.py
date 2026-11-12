@@ -87,7 +87,21 @@ EN: dict[str, object] = {
         "two thirds and the LASSO adds 0.003 bp over AR(1). The corridor is too "
         "tight for the overnight choice to carry money."
     ),
-    "tb_r2": "R² against AR(1) by year",
+    "tb_rmse": "Out-of-sample RMSE by year, bp",
+    "naive_label": "Naive (yesterday's value)",
+    "c_forecaster": "forecaster",
+    "c_benchmark": "model against",
+    "c_r2_bench": "R² vs benchmark",
+    "g_turn_days": "turn days",
+    "turns_vs_naive": (
+        "Against a naive range at the {h}-day horizon, over {n} past {kinds}, "
+        "the calibrated range {verdict}: pinball loss at p90 {pm} against "
+        "{pn} bp for naive, with {cm}% of turns at or below p90 against {cn}% "
+        "(target 90%)."
+    ),
+    "vs_beats": "beats it",
+    "vs_loses": "does not beat it on loss but covers more",
+    "vs_loses_both": "does not beat it",
     "tb_dm": "Diebold-Mariano test against AR(1)",
     "tb_cov": "80% interval coverage",
     "tb_turns": "Turn quantiles, raw and calibrated",
@@ -158,7 +172,7 @@ EN: dict[str, object] = {
     "dl_turns": "Next turns",
     "dl_analogs": "Analogs",
     "dl_ye": "Past year-ends",
-    "dl_r2": "R² by year",
+    "dl_r2": "RMSE by year",
     "dl_dm": "Diebold-Mariano",
     "dl_cov": "Interval coverage",
     "dl_turnscores": "Turn quantile scores",
@@ -654,7 +668,21 @@ FR: dict[str, object] = {
         "capte les deux tiers et le LASSO ajoute 0,003 pb à l'AR(1). Le corridor "
         "est trop étroit pour que le choix au jour le jour rapporte."
     ),
-    "tb_r2": "R² face à l'AR(1) par année",
+    "tb_rmse": "RMSE hors échantillon par année, pb",
+    "naive_label": "Naïf (valeur de la veille)",
+    "c_forecaster": "prévision",
+    "c_benchmark": "modèle face à",
+    "c_r2_bench": "R² vs référence",
+    "g_turn_days": "jours d'échéance",
+    "turns_vs_naive": (
+        "Face à un intervalle naïf à l'horizon de {h} jours, sur {n} {kinds} "
+        "passées, l'intervalle calibré {verdict} : perte pinball au p90 de {pm} "
+        "contre {pn} pb pour le naïf, avec {cm} % des échéances au niveau du p90 "
+        "ou en dessous contre {cn} % (cible 90 %)."
+    ),
+    "vs_beats": "fait mieux",
+    "vs_loses": "fait moins bien en perte mais couvre davantage",
+    "vs_loses_both": "fait moins bien",
     "tb_dm": "Test de Diebold-Mariano face à l'AR(1)",
     "tb_cov": "Couverture de l'intervalle à 80 %",
     "tb_turns": "Quantiles d'échéance, bruts et calibrés",
@@ -725,7 +753,7 @@ FR: dict[str, object] = {
     "dl_turns": "Prochaines échéances",
     "dl_analogs": "Analogues",
     "dl_ye": "Fins d'année passées",
-    "dl_r2": "R² par année",
+    "dl_r2": "RMSE par année",
     "dl_dm": "Diebold-Mariano",
     "dl_cov": "Couverture de l'intervalle",
     "dl_turnscores": "Scores des quantiles d'échéance",

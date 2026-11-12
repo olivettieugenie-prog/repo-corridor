@@ -412,6 +412,24 @@ def turns_panel() -> None:
                    signed=[T["tt_col_p50"], T["tt_col_p90"], T["tt_col_p95"]], row_height=30,
                    column_config={T[k]: st.column_config.TextColumn(width=w)
                                   for k, w in widths.items()})
+        # Does the calibrated range beat the naive range at this turn's horizon?
+        cmp_turn = next(((d, k) for d, k in turns if k in ("month-end", "quarter-end")), None)
+        if cmp_turn is not None:
+            d1, k1 = cmp_turn
+            h1 = roll_cost.turn_quantiles(COEFS, k1, STATE.scarcity, STATE.base_bp,
+                                          roll_cost.days_until(STATE, d1), POLICY)["horizon"]
+            nrg = pd.read_csv(PROC / "turn_naive_ranges.csv").set_index(["type", "horizon", "method"])
+            mod, nai = nrg.loc[(k1, h1, "calibrated model")], nrg.loc[(k1, h1, "naive range")]
+            if mod["pinball_q90"] < nai["pinball_q90"]:
+                verdict = T["vs_beats"]
+            elif abs(mod["at_or_below_q90"] - 0.9) < abs(nai["at_or_below_q90"] - 0.9):
+                verdict = T["vs_loses"]
+            else:
+                verdict = T["vs_loses_both"]
+            st.caption(T["turns_vs_naive"].format(
+                h=h1, n=int(mod["n"]), kinds=T[f"turns_{k1}"], verdict=verdict,
+                pm=n(mod["pinball_q90"], 2), pn=n(nai["pinball_q90"], 2),
+                cm=n(100 * mod["at_or_below_q90"], 0), cn=n(100 * nai["at_or_below_q90"], 0)))
         for kind, h, share in RAW_MEDIANS:
             st.caption(T["turns_raw_median"].format(kinds=T[f"turns_{kind}"], h=h,
                                                     above=n(100 * (1 - share), 0)))
@@ -706,19 +724,32 @@ def pval(p) -> str:
     return T["p_undefined"] if pd.isna(p) else n(p, 4)
 
 
+# Every comparison table has the naive benchmark (yesterday's value carried
+# forward, src/dm_test.py) as its first row.
 dm = pd.read_csv(PROC / "dm_test.csv")
-years = dm[dm["period"].str.fullmatch(r"\d{4}")]
-r2_view = pd.DataFrame({T["c_year"]: years["period"], T["c_n"]: years["n"].astype(str),
-                        T["c_r2"]: fmt_col(years["r2_vs_ar1"], 3, sign=True),
-                        T["c_rmse"]: fmt_col(years["rmse_model_bp"], 2),
-                        T["c_rmse_ar1"]: fmt_col(years["rmse_ar1_bp"], 2)})
-PERIOD = {"all": T["g_all"]}
-dm_view = pd.DataFrame({T["c_period"]: dm["period"].map(lambda x: PERIOD.get(x, x)),
-                        T["c_n"]: dm["n"].astype(str),
-                        T["c_r2"]: fmt_col(dm["r2_vs_ar1"], 3, sign=True),
-                        T["c_hln"]: [T["p_undefined"] if pd.isna(v) else n(v, 2, sign=True)
-                                     for v in dm["hln_stat"]],
-                        T["c_p"]: [pval(v) for v in dm["p_two_sided"]]})
+dmn = pd.read_csv(PROC / "dm_test_naive.csv")
+PERIOD = {"all": T["g_all"], "turn days": T["g_turn_days"], "other days": T["g_other"]}
+mn = dmn[(dmn["forecaster"] == "model") & (dmn["benchmark"] == "naive")].set_index("group")
+periods = ["all", "2024+"] + [p_ for p_ in dm["period"] if p_.isdigit()]
+rmse_raw = pd.DataFrame({
+    "forecaster": ["naive", "AR(1)", "two-stage LASSO"],
+    **{p_: [mn.at[p_, "rmse_benchmark_bp"], dm.set_index("period").at[p_, "rmse_ar1_bp"],
+            dm.set_index("period").at[p_, "rmse_model_bp"]] for p_ in periods}})
+r2_view = pd.DataFrame({T["c_forecaster"]: [T["naive_label"], T["rule_ar1"], T["rule_lasso"]],
+                        **{PERIOD.get(p_, p_): fmt_col(rmse_raw[p_], 2) for p_ in periods}})
+# Diebold-Mariano: the model against each benchmark, naive first.
+dm_long = pd.concat([
+    mn.reset_index().rename(columns={"group": "period", "r2_vs_benchmark": "r2"})
+      .assign(benchmark="naive"),
+    dm.rename(columns={"r2_vs_ar1": "r2"}).assign(benchmark="AR(1)"),
+], ignore_index=True)[["benchmark", "period", "n", "r2", "hln_stat", "p_two_sided"]]
+dm_view = pd.DataFrame({
+    T["c_benchmark"]: dm_long["benchmark"].map({"naive": T["naive_label"], "AR(1)": T["rule_ar1"]}),
+    T["c_period"]: dm_long["period"].map(lambda x: PERIOD.get(x, x)),
+    T["c_n"]: dm_long["n"].astype(str),
+    T["c_r2_bench"]: fmt_col(dm_long["r2"], 3, sign=True),
+    T["c_hln"]: [T["p_undefined"] if pd.isna(v) else n(v, 2, sign=True) for v in dm_long["hln_stat"]],
+    T["c_p"]: [pval(v) for v in dm_long["p_two_sided"]]})
 cov_raw = pd.read_csv(PROC / "interval_coverage.csv")
 GROUP = {"all": T["g_all"], "month-end": T["g_me"], "other days": T["g_other"],
          "quarter-end": T["g_qe"], "month-end, 2024+": T["g_me24"],
@@ -731,10 +762,20 @@ cov_view = pd.DataFrame({T["c_group"]: cov_raw["group"].map(lambda g: GROUP.get(
                          T["c_width"]: fmt_col(cov_raw["mean_width_bp"], 2)})
 hz = pd.read_csv(PROC / "turn_quantile_horizons.csv")
 hz = hz[hz["type"].isin(["month-end", "quarter-end"]) & hz["version"].isin(["raw", "calibrated"])]
+# The naive range (src/turn_quantiles.py) leads each type and horizon.
+nr = pd.read_csv(PROC / "turn_naive_ranges.csv")
+nr = nr[(nr["method"] == "naive range") & nr["type"].isin(["month-end", "quarter-end"])]
+nr = nr.rename(columns={"at_or_below_q50": "cover_q50", "at_or_below_q90": "cover_q90",
+                        "at_or_below_q95": "cover_q95"}).assign(version="naive")
+hz = pd.concat([nr[["type", "horizon", "version", "n", "cover_q50", "cover_q90", "cover_q95",
+                    "pinball_q90"]], hz], ignore_index=True)
+hz["order"] = hz["version"].map({"naive": 0, "raw": 1, "calibrated": 2})
+hz = hz.sort_values(["type", "horizon", "order"]).drop(columns="order").reset_index(drop=True)
 hz_view = pd.DataFrame({
     T["c_type"]: hz["type"].map(lambda k: T[f"turn_{k}"]),
     T["c_h"]: hz["horizon"].astype(str),
-    T["c_version"]: hz["version"].map({"raw": T["v_raw"], "calibrated": T["v_cal"]}),
+    T["c_version"]: hz["version"].map({"naive": T["naive_label"], "raw": T["v_raw"],
+                                       "calibrated": T["v_cal"]}),
     T["c_n"]: hz["n"].astype(str),
     T["c_cov3"]: ["/".join(n(100 * r[c], 0) for c in ("cover_q50", "cover_q90", "cover_q95"))
                   for _, r in hz.iterrows()],
@@ -742,11 +783,11 @@ hz_view = pd.DataFrame({
 
 t1, t2 = st.columns(2)
 with t1:
-    st.markdown(f"**{T['tb_r2']}**")
-    show_table("dl_r2", r2_view, years, signed=[T["c_r2"]])
+    st.markdown(f"**{T['tb_rmse']}**")
+    show_table("dl_r2", r2_view, rmse_raw)
 with t2:
     st.markdown(f"**{T['tb_dm']}**")
-    show_table("dl_dm", dm_view, dm, signed=[T["c_r2"], T["c_hln"]])
+    show_table("dl_dm", dm_view, dm_long, signed=[T["c_r2_bench"], T["c_hln"]], height=320)
 t3, t4 = st.columns(2)
 with t3:
     st.markdown(f"**{T['tb_cov']}**")
@@ -844,14 +885,20 @@ zline = (alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=MUTED, strokeWidth=
          .encode(x="x:Q"))
 
 comp = pd.read_csv(PROC / "model_comparison.csv", parse_dates=["date"])
-rival = []
+# Naive first: yesterday's deviation carried forward, on the same dates.
+first = comp[comp["model"] == comp["model"].iloc[0]].merge(oos[["date", "naive"]], on="date")
+f24 = first[first["date"].dt.year >= 2024]
+rival = [{"model": "naive", "r2_vs_ar1": r2(first["y"], first["naive"], first["ar1"]),
+          "r2_vs_ar1_2024": r2(f24["y"], f24["naive"], f24["ar1"]),
+          "rmse_bp": float(np.sqrt(np.mean((first["y"] - first["naive"]) ** 2)))}]
 for name, g in comp.groupby("model", sort=False):
     g24 = g[g["date"].dt.year >= 2024]
     rival.append({"model": name, "r2_vs_ar1": r2(g["y"], g["pred"], g["ar1"]),
                   "r2_vs_ar1_2024": r2(g24["y"], g24["pred"], g24["ar1"]),
                   "rmse_bp": float(np.sqrt(np.mean((g["y"] - g["pred"]) ** 2)))})
 rival = pd.DataFrame(rival)
-rival_view = pd.DataFrame({T["c_model"]: rival["model"].map(lambda m: T["rivals"].get(m, m)),
+rival_view = pd.DataFrame({T["c_model"]: rival["model"].map(
+    lambda m: T["naive_label"] if m == "naive" else T["rivals"].get(m, m)),
                            T["c_r2_all"]: fmt_col(rival["r2_vs_ar1"], 3, sign=True),
                            T["c_r2_24"]: fmt_col(rival["r2_vs_ar1_2024"], 3, sign=True),
                            T["c_rmse"]: fmt_col(rival["rmse_bp"], 3)})

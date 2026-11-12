@@ -103,6 +103,23 @@ class LayoutTest(unittest.TestCase):
                     dl = [b for b in at.download_button if b.key == "download_dl_forward"]
                     self.assertEqual(len(dl), 1)
 
+    def test_naive_leads_every_model_comparison_table(self):
+        for lang in LANGS:
+            for theme in ("light", "dark"):
+                with self.subTest(lang=lang, theme=theme):
+                    T = STRINGS[lang]
+                    at = self.run_app(lang, theme)
+                    first_col = {T["c_forecaster"], T["c_benchmark"], T["c_model"]}
+                    tables = [d.value for d in at.dataframe if hasattr(d.value, "columns")]
+                    comparison = [v for v in tables if v.columns[0] in first_col]
+                    comparison += [v for v in tables if T["c_version"] in v.columns]
+                    self.assertEqual(len(comparison), 4)
+                    for v in comparison:
+                        col = T["c_version"] if T["c_version"] in v.columns else v.columns[0]
+                        self.assertEqual(v.iloc[0][col], T["naive_label"])
+                    caps = " ".join(c.value for c in at.caption)
+                    self.assertIn(T["turns_vs_naive"].split("{")[0], caps)
+
     def test_forward_panel_without_a_path(self):
         os.environ["REPO_FORWARD_LOCAL"] = str(Path(self.tmp.name) / "none.csv")
         at = self.run_app()
