@@ -117,7 +117,19 @@ def r2(y, p, base) -> float:
     return float(1 - np.sum((y - p) ** 2) / np.sum((y - base) ** 2))
 
 
-daily, oos, carry = load()
+# daily_bt is main's frozen backtest snapshot (data/processed), kept for the
+# backtest panels. daily is the table the job rebuilt on its last run, for
+# everything shown as current: header, strip, charts, analogs, turns.
+daily_bt, oos, carry = load()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_daily(url: str, local: str) -> tuple[pd.DataFrame, str]:
+    return live_feed.load_daily(url, Path(local))
+
+
+daily, DAILY_SOURCE = load_daily(os.environ.get("REPO_DAILY_URL", live_feed.DAILY_URL),
+                                 os.environ.get("REPO_DAILY_LOCAL", str(live_feed.DAILY_LOCAL)))
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -715,7 +727,8 @@ st.divider()
 st.subheader(T["s3"], anchor="model")
 st.caption(T["cap_short_model"])
 k1, k2 = st.columns(2)
-k1.metric(T["tile_days"], n(len(daily)), help=T["tile_days_help"])
+k1.metric(T["tile_days"], n(len(daily)),
+          help=T["tile_days_help"].format(last=date_short(daily["date"].max(), LANG)))
 k2.metric(T["tile_skill"], n(r2(rec["y"], rec["two_stage"], rec["ar1"]), 3, sign=True),
           help=T["tile_skill_help"].format(**DM_ARGS))
 
@@ -917,7 +930,7 @@ st.divider()
 st.subheader(T["s4"], anchor="carry")
 st.caption(T["cap_short_carry"])
 always = carry["carry_bp"].mean()
-peak = daily["carry_bp"].max()
+peak = daily_bt["carry_bp"].max()
 r1, r2c, r3 = st.columns([1, 1, 3])
 r1.metric(T["tile_carry"], f"{n(always, 2)} {BP}", help=T["tile_carry_help"])
 r2c.metric(T["tile_peak"], f"{n(peak)} {BP}", help=T["tile_peak_help"])

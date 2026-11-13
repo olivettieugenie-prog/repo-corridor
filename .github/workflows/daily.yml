@@ -63,6 +63,12 @@ jobs:
           REPO_SKIP_FRED: "1"
         run: python src/forecast_next.py
 
+      - name: Copy the rebuilt daily table for the app
+        # forecast_next.py rebuilds the table with build_dataset.py --root
+        # .live_work; the app shows it so its header and charts are current.
+        # data/processed on main stays the frozen backtest snapshot.
+        run: cp .live_work/data/processed/daily.csv data/live/daily.csv
+
       - name: Commit the log to the data branch
         run: |
           set -euo pipefail
@@ -76,11 +82,11 @@ jobs:
             find "$db" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           fi
           mkdir -p "$db/data/live"
-          cp data/live/forecast.csv data/live/forward.csv "$db/data/live/"
+          cp data/live/forecast.csv data/live/forward.csv data/live/daily.csv "$db/data/live/"
           cd "$db"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/live/forecast.csv data/live/forward.csv
+          git add data/live/forecast.csv data/live/forward.csv data/live/daily.csv
           if git diff --cached --quiet; then
             echo "nothing new to commit"
           else

@@ -240,7 +240,7 @@ EN: dict[str, object] = {
     "dl_track": "Track record",
     "dl_forward": "Forward path",
     # dashboard header, links and market strip
-    "hdr_asof": "Rates to {rates} · balances to {bal} · live forecast run {run} New York time",
+    "hdr_asof": "Rates to {rates} · balances to {bal} · forecast run {run} (New York time)",
     "hdr_asof_nolive": "Rates to {rates} · balances to {bal} · no live forecast yet",
     "hdr_delay": (
         "Data delay: SOFR and EFFR publish the next business day at about 8:00 "
@@ -441,7 +441,7 @@ EN: dict[str, object] = {
 
     # stat tiles
     "tile_days": "SOFR days covered",
-    "tile_days_help": "2 April 2018 to 26 October 2026, from the NY Fed API",
+    "tile_days_help": "2 April 2018 to {last}, from the NY Fed API",
     "tile_skill": "Model skill vs AR(1), 2024+",
     "tile_skill_help": (
         "Out-of-sample R squared of the two-stage LASSO against an "
@@ -823,7 +823,7 @@ FR: dict[str, object] = {
     "no": "non",
     "dl_track": "Historique",
     "dl_forward": "Trajectoire à venir",
-    "hdr_asof": "Taux au {rates} · encours au {bal} · prévision calculée le {run}, heure de New York",
+    "hdr_asof": "Taux au {rates} · encours au {bal} · prévision calculée le {run} (heure de New York)",
     "hdr_asof_nolive": "Taux au {rates} · encours au {bal} · pas encore de prévision en conditions réelles",
     "hdr_delay": (
         "Délai des données : SOFR et EFFR sont publiés le jour ouvré suivant "
@@ -1030,7 +1030,7 @@ FR: dict[str, object] = {
     ),
 
     "tile_days": "Jours de SOFR couverts",
-    "tile_days_help": "Du 2 avril 2018 au 26 octobre 2026, via l'API de la Fed de New York",
+    "tile_days_help": "Du 2 avril 2018 au {last}, via l'API de la Fed de New York",
     "tile_skill": "Apport du modèle face à l'AR(1), 2024+",
     "tile_skill_help": (
         "R² hors échantillon du LASSO en deux étapes par rapport à un modèle "

@@ -30,6 +30,12 @@ DATES = ["as_of_date", "target_date"]
 FORWARD_URL = RAW_URL.replace("forecast.csv", "forward.csv")
 FORWARD_LOCAL = ROOT / "data" / "live" / "forward.csv"
 FORWARD_DATES = ["as_of_date", "date"]
+# The daily table the job rebuilt on its last run, for display (header, strip,
+# charts, analogs). REPO_DAILY_URL and REPO_DAILY_LOCAL override it; the last
+# fallback is main's data/processed/daily.csv, the frozen backtest snapshot.
+DAILY_URL = RAW_URL.replace("forecast.csv", "daily.csv")
+DAILY_LOCAL = ROOT / "data" / "live" / "daily.csv"
+DAILY_MAIN = ROOT / "data" / "processed" / "daily.csv"
 
 
 def _ssl_context() -> ssl.SSLContext:
@@ -44,15 +50,15 @@ def _ssl_context() -> ssl.SSLContext:
         return ssl.create_default_context()
 
 
-def _parse(text: str, dates=DATES) -> pd.DataFrame:
+def _parse(text: str, dates=DATES, required: str = "forecast_bp") -> pd.DataFrame:
     df = pd.read_csv(io.StringIO(text), parse_dates=dates)
-    if df.empty or "forecast_bp" not in df.columns:
-        raise ValueError("forecast log has no rows")
+    if df.empty or required not in df.columns:
+        raise ValueError(f"table has no rows or no {required} column")
     return df
 
 
 def load(url: str | None = None, local: Path | None = None, timeout: float = 10,
-         dates=DATES) -> tuple[pd.DataFrame | None, str]:
+         dates=DATES, required: str = "forecast_bp") -> tuple[pd.DataFrame | None, str]:
     """Return (log, source) where source is 'github', 'local' or 'none'."""
     url = url or os.environ.get("REPO_LIVE_URL", RAW_URL)
     local = Path(local or os.environ.get("REPO_LIVE_LOCAL", LOCAL))
@@ -60,7 +66,7 @@ def load(url: str | None = None, local: Path | None = None, timeout: float = 10,
         req = urllib.request.Request(url, headers={"User-Agent": "repo-corridor-app"})
         with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as r:
             text = r.read().decode("utf-8")
-        df = _parse(text, dates)
+        df = _parse(text, dates, required)
         try:
             local.parent.mkdir(parents=True, exist_ok=True)
             local.write_text(text)
@@ -70,7 +76,7 @@ def load(url: str | None = None, local: Path | None = None, timeout: float = 10,
     except Exception:
         pass
     try:
-        return _parse(local.read_text(), dates), "local"
+        return _parse(local.read_text(), dates, required), "local"
     except Exception:
         return None, "none"
 
@@ -81,6 +87,19 @@ def load_forward(url: str | None = None, local: Path | None = None,
     url = url or os.environ.get("REPO_FORWARD_URL", FORWARD_URL)
     local = Path(local or os.environ.get("REPO_FORWARD_LOCAL", FORWARD_LOCAL))
     return load(url, local, timeout, dates=FORWARD_DATES)
+
+
+def load_daily(url: str | None = None, local: Path | None = None, main: Path | None = None,
+               timeout: float = 10) -> tuple[pd.DataFrame, str]:
+    """The rebuilt daily table: GitHub's data branch, then the local copy,
+    then main's backtest snapshot. Returns (table, 'github'|'local'|'main')."""
+    url = url or os.environ.get("REPO_DAILY_URL", DAILY_URL)
+    local = Path(local or os.environ.get("REPO_DAILY_LOCAL", DAILY_LOCAL))
+    df, source = load(url, local, timeout, dates=["date"], required="sofr")
+    if df is not None:
+        return df.sort_values("date").reset_index(drop=True), source
+    snap = pd.read_csv(main or DAILY_MAIN, parse_dates=["date"])
+    return snap.sort_values("date").reset_index(drop=True), "main"
 
 
 def latest_per_target(df: pd.DataFrame) -> pd.DataFrame:

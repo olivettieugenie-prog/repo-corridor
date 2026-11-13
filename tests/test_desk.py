@@ -17,6 +17,11 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+# App tests read the daily table from main's snapshot, not from whatever the
+# data branch serves today: an unreachable URL and no local copy.
+os.environ.setdefault("REPO_DAILY_URL", "https://example.invalid/daily.csv")
+os.environ.setdefault("REPO_DAILY_LOCAL", str(Path(__file__).resolve().parent / "no_daily.csv"))
+
 import desk  # noqa: E402
 from i18n import LANGS, STRINGS, num  # noqa: E402
 from market_calendar import business_days  # noqa: E402

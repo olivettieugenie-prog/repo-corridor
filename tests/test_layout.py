@@ -16,6 +16,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+# App tests read the daily table from main's snapshot, not from whatever the
+# data branch serves today: an unreachable URL and no local copy.
+os.environ.setdefault("REPO_DAILY_URL", "https://example.invalid/daily.csv")
+os.environ.setdefault("REPO_DAILY_LOCAL", str(Path(__file__).resolve().parent / "no_daily.csv"))
+
 import pandas as pd  # noqa: E402
 
 import dashboard as db  # noqa: E402
