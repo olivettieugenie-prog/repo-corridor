@@ -159,7 +159,8 @@ SRF_TAKE = pd.read_csv(PROC / "srf_takeup.csv", parse_dates=["date"])
 
 # ------------------------------------------------------------------ header
 TILES = dashboard.strip_tiles(daily, LIVE_ROW, SRF_RATES, SRF_TAKE)
-bal_date = max(t["date"] for t in TILES if t["key"] in ("rrp", "tga"))
+# Each balance keeps its own date: TGA usually lags ON RRP by a day.
+TILE_DATE = {t["key"]: t["date"] for t in TILES}
 head, switch = st.columns([5, 1], vertical_alignment="center")
 with switch, st.container(horizontal=True, horizontal_alignment="right"):
     st.segmented_control(T["lang_label"], LANGS, format_func=LANG_NAMES.get,
@@ -167,8 +168,10 @@ with switch, st.container(horizontal=True, horizontal_alignment="right"):
 with head:
     st.title(T["title"])
     asof = dict(rates=desk.long_date(daily["date"].max(), LANG),
-                bal=desk.long_date(bal_date, LANG))
-    st.caption(T["hdr_asof"].format(run=desk.run_time_et(LIVE_ROW["run_time_utc"], LANG), **asof)
+                rrp=desk.long_date(TILE_DATE["rrp"], LANG),
+                tga=desk.long_date(TILE_DATE["tga"], LANG))
+    st.caption(T["hdr_asof"].format(run=desk.run_time_et(LIVE_ROW["run_time_utc"], LANG),
+                                    target=desk.long_date(LIVE_ROW["target_date"], LANG), **asof)
                if LIVE_ROW is not None else T["hdr_asof_nolive"].format(**asof))
     st.caption(T["hdr_delay"])
 st.html(dashboard.navbar(LANG))

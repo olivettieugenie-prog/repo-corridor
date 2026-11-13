@@ -96,9 +96,42 @@ class TestHeaderFollowsTheTable(unittest.TestCase):
                 self.assertEqual(len(at.exception), 0, at.exception)
                 T = STRINGS[lang]
                 header = T["hdr_asof_nolive"].split("{")[0] + desk.long_date(last, lang)
-                self.assertIn(header, [c.value for c in at.caption][0] + "")
+                self.assertTrue(at.caption[0].value.startswith(header))
                 help_ = [m.help for m in at.metric if m.label == T["tile_days"]][0]
                 self.assertEqual(help_, T["tile_days_help"].format(last=date_short(last, lang)))
+
+    def test_header_shows_each_balance_date_and_the_target(self):
+        """ON RRP and TGA keep their own dates (not the later of the two) and
+        the header names the date the forecast is for."""
+        from streamlit.testing.v1 import AppTest
+        from test_desk import make_log
+        log = make_log(3, 0, target_end=pd.Timestamp("2026-11-12"))
+        log.loc[log.index[-1], ["rrp_date", "tga_date"]] = ["2026-11-10", "2026-11-06"]
+        live = self.dir / "forecast.csv"
+        log.to_csv(live, index=False)
+        os.environ.update(REPO_LIVE_URL=live.as_uri(), REPO_LIVE_LOCAL=str(self.dir / "copy.csv"),
+                          REPO_DAILY_URL=BAD_URL, REPO_DAILY_LOCAL=str(self.dir / "none.csv"),
+                          REPO_FORWARD_URL=BAD_URL,
+                          REPO_FORWARD_LOCAL=str(ROOT / "tests" / "fixtures" / "forward.csv"),
+                          REPO_TODAY="2026-11-12")
+        rates = pd.read_csv(MAIN, parse_dates=["date"])["date"].max()
+        for lang in LANGS:
+            with self.subTest(lang=lang):
+                at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=180)
+                at.run()
+                if lang != "en":
+                    at.segmented_control(key="lang").set_value(lang).run()
+                self.assertEqual(len(at.exception), 0, at.exception)
+                T = STRINGS[lang]
+                d = lambda x: desk.long_date(x, lang)  # noqa: E731
+                header = at.caption[0].value
+                expected = T["hdr_asof"].format(
+                    rates=d(rates), rrp=d("2026-11-10"), tga=d("2026-11-06"),
+                    target=d("2026-11-12"), run=desk.run_time_et(log["run_time_utc"].iloc[-1], lang))
+                self.assertEqual(header, expected)
+                # TGA shows its own, earlier date, not the later ON RRP one.
+                self.assertIn(("TGA to " if lang == "en" else "TGA au ") + d("2026-11-06"), header)
+                self.assertNotIn(("TGA to " if lang == "en" else "TGA au ") + d("2026-11-10"), header)
 
 
 if __name__ == "__main__":

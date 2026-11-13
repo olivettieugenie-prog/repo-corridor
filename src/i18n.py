@@ -240,8 +240,9 @@ EN: dict[str, object] = {
     "dl_track": "Track record",
     "dl_forward": "Forward path",
     # dashboard header, links and market strip
-    "hdr_asof": "Rates to {rates} · balances to {bal} · forecast run {run} (New York time)",
-    "hdr_asof_nolive": "Rates to {rates} · balances to {bal} · no live forecast yet",
+    "hdr_asof": ("Rates to {rates} · ON RRP to {rrp} · TGA to {tga} · forecast for {target}, "
+                 "run {run} (New York time)"),
+    "hdr_asof_nolive": "Rates to {rates} · ON RRP to {rrp} · TGA to {tga} · no live forecast yet",
     "hdr_delay": (
         "Data delay: SOFR and EFFR publish the next business day at about 8:00 "
         "and 9:00 ET, the TGA a day later; the forecast job runs at 14:37 UTC, "
@@ -823,8 +824,10 @@ FR: dict[str, object] = {
     "no": "non",
     "dl_track": "Historique",
     "dl_forward": "Trajectoire à venir",
-    "hdr_asof": "Taux au {rates} · encours au {bal} · prévision calculée le {run} (heure de New York)",
-    "hdr_asof_nolive": "Taux au {rates} · encours au {bal} · pas encore de prévision en conditions réelles",
+    "hdr_asof": ("Taux au {rates} · ON RRP au {rrp} · TGA au {tga} · prévision pour le {target}, "
+                 "calculée le {run} (heure de New York)"),
+    "hdr_asof_nolive": ("Taux au {rates} · ON RRP au {rrp} · TGA au {tga} · pas encore de "
+                        "prévision en conditions réelles"),
     "hdr_delay": (
         "Délai des données : SOFR et EFFR sont publiés le jour ouvré suivant "
         "vers 8 h et 9 h (heure de New York), le TGA un jour plus tard ; la "
