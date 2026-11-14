@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from design import DESIGNS, active_name  # noqa: E402
 from i18n import LANG_NAMES, LANGS, STRINGS, date_short, num  # noqa: E402
 import analogs  # noqa: E402
+from backtest_carry import run_rule  # noqa: E402
 import dashboard  # noqa: E402
 import desk  # noqa: E402
 import market_calendar  # noqa: E402
@@ -121,6 +122,15 @@ def r2(y, p, base) -> float:
 # backtest panels. daily is the table the job rebuilt on its last run, for
 # everything shown as current: header, strip, charts, analogs, turns.
 daily_bt, oos, carry = load()
+
+
+def carry_rules(carry: pd.DataFrame, cost_bp: float = 0.0) -> list[float]:
+    """Net bp of always lend, known only, AR(1), two-stage LASSO and perfect
+    foresight, scored by backtest_carry.run_rule on carry_backtest.csv."""
+    actual = carry["carry_bp"].to_numpy(float)
+    preds = (np.full(len(carry), 1e9), carry["carry_known_bp"], carry["carry_ar1"],
+             carry["carry_ts"], actual)
+    return [float(run_rule(np.asarray(p, float), actual, cost_bp)["net_bp"]) for p in preds]
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -412,10 +422,20 @@ def turns_table(turns) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+TURNS_AHEAD_DAYS = 100
+
+
+def turns_until(day) -> pd.Timestamp:
+    """The Next turns window: 100 calendar days ahead, but never past the last
+    date the settlement calendar covers."""
+    return min(pd.Timestamp(day) + pd.Timedelta(days=TURNS_AHEAD_DAYS),
+               market_calendar.COVERED_UNTIL)
+
+
 def turns_panel() -> None:
     with st.container(border=True):
         st.subheader(T["turns_title"], anchor="turns")
-        turns = roll_cost.upcoming_turns(today(), "2026-12-31")
+        turns = roll_cost.upcoming_turns(today(), turns_until(today()))
         if not turns:
             st.info(T["turn_none"])
             return
@@ -931,16 +951,27 @@ st.divider()
 
 # ------------------------------------------------------------ is it worth it
 st.subheader(T["s4"], anchor="carry")
-st.caption(T["cap_short_carry"])
+RULE_NET = carry_rules(carry)
+RULE_NET_1BP = carry_rules(carry, 1.0)
+# The LASSO's edge over AR(1) is the gap between the two net figures as the
+# table shows them (5.273 - 5.270); unrounded it is 0.0025 bp.
+CARRY_ARGS = dict(prize=n(RULE_NET[4] - RULE_NET[0], 3),
+                  edge=n(round(RULE_NET[3], 3) - round(RULE_NET[2], 3), 3),
+                  lasso1=n(RULE_NET_1BP[3] - RULE_NET_1BP[0], 3, sign=True),
+                  ar1_1=n(RULE_NET_1BP[2] - RULE_NET_1BP[0], 3, sign=True),
+                  days=n(len(carry), 0))
+st.caption(T["cap_short_carry"].format(**CARRY_ARGS))
 always = carry["carry_bp"].mean()
 peak = daily_bt["carry_bp"].max()
 r1, r2c, r3 = st.columns([1, 1, 3])
-r1.metric(T["tile_carry"], f"{n(always, 2)} {BP}", help=T["tile_carry_help"])
+r1.metric(T["tile_carry"], f"{n(always, 2)} {BP}", help=T["tile_carry_help"].format(**CARRY_ARGS))
 r2c.metric(T["tile_peak"], f"{n(peak)} {BP}", help=T["tile_peak_help"])
+# Net carry of each placement rule at zero switching cost, computed from the
+# backtest's own decisions so the table cannot drift from carry_backtest.csv.
 # None marks the rule's own column, shown as a dash.
-NET = [4.829, 5.030, 5.114, 5.117, 5.132]
-VS_ALWAYS = [None, 0.201, 0.284, 0.287, 0.303]
-VS_KNOWN = [-0.201, None, 0.084, 0.087, 0.103]
+NET = [round(v, 3) for v in RULE_NET]
+VS_ALWAYS = [None] + [round(v - RULE_NET[0], 3) for v in RULE_NET[1:]]
+VS_KNOWN = [round(v - RULE_NET[1], 3) if i != 1 else None for i, v in enumerate(RULE_NET)]
 RULES = ["always lend", "known only, no model", "AR(1)", "two-stage LASSO", "perfect foresight"]
 dash = lambda v: "—" if v is None else n(v, 3, sign=True)  # noqa: E731
 rules = pd.DataFrame({
@@ -986,7 +1017,7 @@ with st.expander(T["m_importance"]):
     st.markdown(T["cap3b"])
 with st.expander(T["m_carry"]):
     st.markdown(T["s4_intro"])
-    st.markdown(T["conclusion"])
+    st.markdown(T["conclusion"].format(**CARRY_ARGS))
 with st.expander(T["m_timing"]):
     st.markdown(T["timing_table"])
     st.markdown(T["timing_note"])

@@ -83,8 +83,8 @@ EN: dict[str, object] = {
     "ch_rrp_daily": "ON RRP usage, daily",
     "cap_short_model": "All scores are out of sample and walk-forward; method notes are at the bottom.",
     "cap_short_carry": (
-        "The whole opportunity is 0.303 bp a year; a rule with no model takes "
-        "two thirds and the LASSO adds 0.003 bp over AR(1). The corridor is too "
+        "The whole opportunity is {prize} bp a year; a rule with no model takes "
+        "two thirds and the LASSO adds {edge} bp over AR(1). The corridor is too "
         "tight for the overnight choice to carry money."
     ),
     "tb_rmse": "Out-of-sample RMSE by year, bp",
@@ -453,7 +453,7 @@ EN: dict[str, object] = {
     "tile_carry": "Carry from always lending",
     "tile_carry_help": (
         "Mean annualised pickup of overnight repo over the ON RRP facility, "
-        "on the 1,336 days where the award rate is known"
+        "on the {days} out-of-sample decision days from May 2020"
     ),
     "tile_peak": "Carry on 17 Sep 2019",
     "tile_peak_help": (
@@ -599,10 +599,10 @@ EN: dict[str, object] = {
     "rule_lasso": "two-stage LASSO",
     "rule_perfect": "perfect foresight",
     "conclusion": (
-        "The entire opportunity is **0.303 bp** of annualised yield. A rule "
+        "The entire opportunity is **{prize} bp** of annualised yield. A rule "
         "with no model captures two thirds of it, and the LASSO's margin over "
-        "an autoregression is 0.003 bp, which is nothing. At a 1 bp switching "
-        "cost the LASSO falls behind AR(1), +0.155 against +0.186. The Fed's "
+        "an autoregression is {edge} bp, which is nothing. At a 1 bp switching "
+        "cost the LASSO falls behind AR(1), {lasso1} against {ar1_1}. The Fed's "
         "two facilities bound the corridor so tightly that the overnight "
         "placement decision has almost no money in it. In 2022 always-lend "
         "gave up 1.55 bp against the facility and every smarter rule merely "
@@ -665,8 +665,8 @@ FR: dict[str, object] = {
     "ch_rrp_daily": "Recours à l'ON RRP, quotidien",
     "cap_short_model": "Tous les scores sont hors échantillon et glissants ; les notes de méthode figurent en bas de page.",
     "cap_short_carry": (
-        "L'opportunité totale est de 0,303 pb par an ; une règle sans modèle en "
-        "capte les deux tiers et le LASSO ajoute 0,003 pb à l'AR(1). Le corridor "
+        "L'opportunité totale est de {prize} pb par an ; une règle sans modèle en "
+        "capte les deux tiers et le LASSO ajoute {edge} pb à l'AR(1). Le corridor "
         "est trop étroit pour que le choix au jour le jour rapporte."
     ),
     "tb_rmse": "RMSE hors échantillon par année, pb",
@@ -1044,7 +1044,7 @@ FR: dict[str, object] = {
     "tile_carry": "Portage du prêt systématique",
     "tile_carry_help": (
         "Surplus annualisé moyen du repo au jour le jour sur la facilité "
-        f"ON RRP, sur les 1{NNBSP}336 jours où le taux servi est connu"
+        "ON RRP, sur les {days} jours de décision hors échantillon depuis mai 2020"
     ),
     "tile_peak": "Portage le 17 sept. 2019",
     "tile_peak_help": (
@@ -1191,11 +1191,11 @@ FR: dict[str, object] = {
     "rule_lasso": "LASSO en deux étapes",
     "rule_perfect": "prévision parfaite",
     "conclusion": (
-        "L'opportunité totale représente **0,303 pb** de rendement annualisé. "
+        "L'opportunité totale représente **{prize} pb** de rendement annualisé. "
         "Une règle sans modèle en capte les deux tiers, et l'avantage du LASSO "
-        "sur un modèle autorégressif est de 0,003 pb, c'est-à-dire rien. Avec "
-        "un coût de bascule de 1 pb, le LASSO passe derrière l'AR(1), +0,155 "
-        "contre +0,186. Les deux facilités de la Fed encadrent le corridor si "
+        "sur un modèle autorégressif est de {edge} pb, c'est-à-dire rien. Avec "
+        "un coût de bascule de 1 pb, le LASSO passe derrière l'AR(1), {lasso1} "
+        "contre {ar1_1}. Les deux facilités de la Fed encadrent le corridor si "
         "étroitement que la décision de placement au jour le jour ne recèle "
         "presque aucune valeur. En 2022, le prêt systématique cédait 1,55 pb "
         "par rapport à la facilité et toutes les règles plus élaborées ne font "

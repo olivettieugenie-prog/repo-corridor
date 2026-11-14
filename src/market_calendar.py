@@ -56,7 +56,11 @@ class SettlementCalendar(AbstractHolidayCalendar):
     ]
 
 
-def holidays(start="2018-01-01", end="2028-12-31") -> pd.DatetimeIndex:
+# The last day the holiday rules are generated for; BDAY knows nothing after it.
+COVERED_UNTIL = pd.Timestamp("2028-12-31")
+
+
+def holidays(start="2018-01-01", end=COVERED_UNTIL) -> pd.DatetimeIndex:
     h = SettlementCalendar().holidays(start, end)
     h = h[h.day_of_week < 5]  # a Saturday New Year's or Veterans Day closes nothing
     extra = pd.DatetimeIndex(AD_HOC)

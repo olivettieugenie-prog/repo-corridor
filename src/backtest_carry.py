@@ -29,8 +29,10 @@ Benchmarks
     AR(1)             known part plus an autoregressive deviation forecast
     two-stage LASSO   known part plus the model's deviation forecast
     perfect foresight the ceiling, using tomorrow's realised carry
-Only days where the award rate is known are used, so the sample starts in
-June 2021. Costs are charged per switch and reported at several levels.
+The award rate is rebuilt from the administered-rate table back to 2018, so
+it is known on every day (carry_usable is 1 throughout) and the sample is every
+out-of-sample date: 1,605 days from 20 May 2020. Costs are charged per switch
+and reported at several levels.
 """
 from __future__ import annotations
 

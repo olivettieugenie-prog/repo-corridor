@@ -270,7 +270,7 @@ As a check, this script reproduces `model_lasso.py`'s headline numbers by an ind
 
 ## Does the skill make money? No, and that is the finding
 
-The rule places tomorrow's overnight cash either in repo at SOFR or at the ON RRP facility at the award rate, decided the day before, on the 1,336 days where the award rate is known.
+The rule places tomorrow's overnight cash either in repo at SOFR or at the ON RRP facility at the award rate, decided the day before, on all 1,605 out-of-sample days from 20 May 2020. The award rate is known on every one of them, rebuilt from the administered-rate table.
 
 The carry decomposes exactly, and the script asserts it: carry = base + deviation + corridor, where base is the spread's trailing median and corridor is the gap between the top of the target range and the award rate. Base and corridor are both known the day before. So most of tomorrow's carry needs no model at all, and a rule given only the known part is the benchmark that matters. Judging against passive always-lend alone would credit the model for the corridor.
 

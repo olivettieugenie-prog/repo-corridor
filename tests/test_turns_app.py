@@ -86,9 +86,11 @@ class TurnsAppTest(unittest.TestCase):
                     tab = self.turns_table(at, T)
                     self.assertEqual(list(tab[T["tt_col_date"]]),
                                      [date_short(pd.Timestamp("2026-11-30"), lang),
-                                      date_short(pd.Timestamp("2026-12-31"), lang)])
+                                      date_short(pd.Timestamp("2026-12-31"), lang),
+                                      date_short(pd.Timestamp("2027-01-29"), lang)])
                     self.assertEqual(list(tab[T["tt_col_type"]]),
-                                     [T["turn_month-end"], T["turn_year-end"]])
+                                     [T["turn_month-end"], T["turn_year-end"],
+                                      T["turn_month-end"]])
                     me, ye = tab.iloc[0], tab.iloc[1]
                     for col in ("tt_col_p50", "tt_col_p90", "tt_col_p95"):
                         self.assertRegex(me[T[col]], r"^[+-]\d")      # signed number
@@ -152,7 +154,8 @@ class TurnsAppTest(unittest.TestCase):
         self.assertIn(STRINGS["en"]["calc_empty"], [w.value for w in at.warning])
 
     def test_no_turns_left(self):
-        os.environ["REPO_TODAY"] = "2027-01-04"
+        # Past the last business day the settlement calendar covers.
+        os.environ["REPO_TODAY"] = "2028-12-30"
         for lang in LANGS:
             with self.subTest(lang=lang):
                 at = self.run_app(lang)
