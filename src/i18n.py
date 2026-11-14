@@ -83,9 +83,10 @@ EN: dict[str, object] = {
     "ch_rrp_daily": "ON RRP usage, daily",
     "cap_short_model": "All scores are out of sample and walk-forward; method notes are at the bottom.",
     "cap_short_carry": (
-        "The whole opportunity is {prize} bp a year; a rule with no model takes "
-        "two thirds and the LASSO adds {edge} bp over AR(1). The corridor is too "
-        "tight for the overnight choice to carry money."
+        "The point forecast earns nothing on the overnight choice: {edge} bp "
+        "over AR(1), out of a whole prize of {prize} bp a year. So this is a "
+        "risk monitor, not a source of alpha; its value is a range to budget "
+        "against, priced in the next section."
     ),
     "tb_rmse": "Out-of-sample RMSE by year, bp",
     "naive_label": "Naive (yesterday's value)",
@@ -179,6 +180,8 @@ EN: dict[str, object] = {
     "dl_rival": "Rival specifications",
     "dl_importance": "Permutation importance",
     "dl_rules": "Carry rules",
+    "dl_value_qe": "Range value, quarter-ends",
+    "dl_value_me": "Range value, month-ends",
     "dl_next40": "Next 40 days path",
     "rivals": {
         "linear, main effects": "linear, main effects",
@@ -256,6 +259,7 @@ EN: dict[str, object] = {
     "nav_calendar": "Calendar",
     "nav_model": "Model",
     "nav_carry": "Carry",
+    "nav_value": "Value",
     "nav_method": "Method",
     "strip_sofr": "SOFR",
     "strip_effr": "EFFR",
@@ -330,6 +334,7 @@ EN: dict[str, object] = {
 
     # term versus roll
     "calc_title": "Term or roll?",
+    "calc_benchmark": "SOFR is a benchmark: a desk's own level differs by collateral and counterparty.",
     "calc_start": "Start",
     "calc_end": "End",
     "calc_quote": "Term repo quote, %",
@@ -598,6 +603,43 @@ EN: dict[str, object] = {
     "rule_ar1": "AR(1)",
     "rule_lasso": "two-stage LASSO",
     "rule_perfect": "perfect foresight",
+    "s5": "What the range is worth",
+    "s5_cap": (
+        "The 90% line read as the highest fixed rate to accept for a turn: "
+        "cushion is what locking at it overpays, overshoot what rolling loses "
+        "when it fails. Per turn, in bp and USD on $1bn."
+    ),
+    "m_value": "What the range is worth",
+    "s5_intro": (
+        "Read the 90% line as a break-even: the highest fixed rate a borrower "
+        "who must fund over the turn should accept. **Cushion** is what locking "
+        "at the line overpays when the turn prints below it; **overshoot** is "
+        "what rolling loses when the turn prints above it. Out-of-sample turns "
+        "from 2020, per turn, in bp and in USD on $1bn (a Friday turn carries "
+        "three nights)."
+    ),
+    "s5_read": (
+        "On quarter-ends the model's line failed {m_miss} times in {n} forecasts "
+        "(worst {m_worst} bp); the naive line failed {v_miss} times (worst "
+        "{v_worst} bp). The price of that safety is the cushion: {m_cush} bp on "
+        "average against {v_cush} bp."
+    ),
+    "s5_caveat": (
+        "Not a P&L: public data has no term repo quotes, and SOFR is a "
+        "benchmark, not a dealable rate."
+    ),
+    "tv_qe": "Quarter-ends",
+    "tv_me": "Month-ends",
+    "tv_h": "h",
+    "tv_method": "line",
+    "tv_hits": "held",
+    "tv_cush": "cushion bp",
+    "tv_over": "overshoot bp",
+    "tv_worst": "worst bp",
+    "tv_cush_usd": "cushion $/bn",
+    "tv_over_usd": "overshoot $/bn",
+    "tv_model": "model",
+    "tv_naive": "naive",
     "conclusion": (
         "The entire opportunity is **{prize} bp** of annualised yield. A rule "
         "with no model captures two thirds of it, and the LASSO's margin over "
@@ -665,9 +707,11 @@ FR: dict[str, object] = {
     "ch_rrp_daily": "Recours à l'ON RRP, quotidien",
     "cap_short_model": "Tous les scores sont hors échantillon et glissants ; les notes de méthode figurent en bas de page.",
     "cap_short_carry": (
-        "L'opportunité totale est de {prize} pb par an ; une règle sans modèle en "
-        "capte les deux tiers et le LASSO ajoute {edge} pb à l'AR(1). Le corridor "
-        "est trop étroit pour que le choix au jour le jour rapporte."
+        "La prévision ponctuelle ne rapporte rien sur le choix au jour le jour : "
+        "{edge} pb de plus que l'AR(1), sur une opportunité totale de {prize} pb "
+        "par an. C'est donc un outil de suivi du risque, pas une source "
+        "d'alpha ; sa valeur est une fourchette sur laquelle bâtir un budget, "
+        "chiffrée dans la section suivante."
     ),
     "tb_rmse": "RMSE hors échantillon par année, pb",
     "naive_label": "Naïf (valeur de la veille)",
@@ -761,6 +805,8 @@ FR: dict[str, object] = {
     "dl_rival": "Spécifications concurrentes",
     "dl_importance": "Importance par permutation",
     "dl_rules": "Règles de portage",
+    "dl_value_qe": "Valeur de la fourchette, fins de trimestre",
+    "dl_value_me": "Valeur de la fourchette, fins de mois",
     "dl_next40": "Trajectoire des 40 jours",
     "rivals": {
         "linear, main effects": "linéaire, effets principaux",
@@ -841,6 +887,7 @@ FR: dict[str, object] = {
     "nav_calendar": "Calendrier",
     "nav_model": "Modèle",
     "nav_carry": "Portage",
+    "nav_value": "Valeur",
     "nav_method": "Méthode",
     "strip_sofr": "SOFR",
     "strip_effr": "EFFR",
@@ -915,6 +962,10 @@ FR: dict[str, object] = {
     ),
 
     "calc_title": "Terme ou renouvellement au jour le jour ?",
+    "calc_benchmark": (
+        "Le SOFR est un taux de référence : le niveau propre à chaque desk "
+        "varie selon la garantie et la contrepartie."
+    ),
     "calc_start": "Début",
     "calc_end": "Fin",
     "calc_quote": "Cotation de pension à terme, %",
@@ -1190,6 +1241,47 @@ FR: dict[str, object] = {
     "rule_ar1": "AR(1)",
     "rule_lasso": "LASSO en deux étapes",
     "rule_perfect": "prévision parfaite",
+    "s5": "Ce que vaut la fourchette",
+    "s5_cap": (
+        "La ligne à 90 % lue comme le taux fixe maximal à accepter pour une fin "
+        "de mois : le coussin est le surcoût d'un blocage à ce niveau, le "
+        "dépassement la perte d'un renouvellement quand elle cède. Par fin de "
+        "mois, en pb et en dollars pour 1 milliard."
+    ),
+    "m_value": "Ce que vaut la fourchette",
+    "s5_intro": (
+        "La ligne à 90 % se lit comme un seuil de rentabilité : le taux fixe le "
+        "plus élevé qu'un emprunteur tenu de se financer sur la fin de mois "
+        "devrait accepter. Le **coussin** est le surcoût d'un blocage au niveau "
+        "de la ligne quand la fin de mois fixe en dessous ; le **dépassement** "
+        "est la perte d'un renouvellement au jour le jour quand elle fixe au-"
+        "dessus. Fins de mois hors échantillon depuis 2020, par fin de mois, en "
+        "pb et en dollars pour 1 milliard (une fin de mois un vendredi porte "
+        "trois nuits)."
+    ),
+    "s5_read": (
+        "Aux fins de trimestre, la ligne du modèle a cédé {m_miss} fois sur {n} "
+        "prévisions (au pire {m_worst} pb) ; la ligne naïve a cédé {v_miss} fois "
+        "(au pire {v_worst} pb). Le prix de cette sécurité est le coussin : "
+        "{m_cush} pb en moyenne contre {v_cush} pb."
+    ),
+    "s5_caveat": (
+        "Ce n'est pas un compte de résultat : les données publiques ne "
+        "contiennent aucune cotation de pension à terme, et le SOFR est un taux "
+        "de référence, pas un taux négociable."
+    ),
+    "tv_qe": "Fins de trimestre",
+    "tv_me": "Fins de mois",
+    "tv_h": "h",
+    "tv_method": "ligne",
+    "tv_hits": "tenue",
+    "tv_cush": "coussin pb",
+    "tv_over": "dépass. pb",
+    "tv_worst": "pire pb",
+    "tv_cush_usd": "coussin $/Md",
+    "tv_over_usd": "dépass. $/Md",
+    "tv_model": "modèle",
+    "tv_naive": "naïve",
     "conclusion": (
         "L'opportunité totale représente **{prize} pb** de rendement annualisé. "
         "Une règle sans modèle en capte les deux tiers, et l'avantage du LASSO "

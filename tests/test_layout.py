@@ -28,9 +28,9 @@ from i18n import LANGS, STRINGS  # noqa: E402
 
 HEADING = {"forward": "fwd_title", "turns": "turns_title", "term-roll": "calc_title",
            "calendar": "s2", "corridor": "s1", "model": "s3", "carry": "s4",
-           "method": "method_title"}
+           "value": "s5", "method": "method_title"}
 TABLE_KEYS = ["dl_turns", "dl_analogs", "dl_r2", "dl_dm", "dl_cov", "dl_turnscores",
-              "dl_rival", "dl_rules"]
+              "dl_rival", "dl_rules", "dl_value_qe", "dl_value_me"]
 KEYS = ("REPO_LIVE_URL", "REPO_LIVE_LOCAL", "REPO_TODAY", "REPO_FORWARD_URL", "REPO_FORWARD_LOCAL")
 
 

@@ -14,7 +14,7 @@ import pandas as pd
 from i18n import STRINGS, num
 
 ROOT = Path(__file__).resolve().parent.parent
-SECTIONS = ["forward", "turns", "term-roll", "corridor", "calendar", "model", "carry", "method"]
+SECTIONS = ["forward", "turns", "term-roll", "corridor", "calendar", "model", "carry", "value", "method"]
 
 
 def css_vars(c: dict) -> str:

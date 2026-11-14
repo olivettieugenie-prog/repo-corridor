@@ -101,6 +101,11 @@ def load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return daily, oos, carry
 
 
+@st.cache_data
+def load_turn_value() -> pd.DataFrame:
+    return pd.read_csv(PROC / "turn_value_summary.csv")
+
+
 def style(chart: alt.Chart) -> alt.Chart:
     return (chart
             .configure_view(strokeWidth=0)
@@ -520,6 +525,7 @@ def calc_panel() -> None:
     first = first if market_calendar.is_business_day(first) else market_calendar.next_business_day(first)
     with st.container(border=True):
         st.subheader(T["calc_title"], anchor="term-roll")
+        st.caption(T["calc_benchmark"])
         fmt = "DD/MM/YYYY" if LANG == "fr" else "YYYY/MM/DD"
         c1, c2 = st.columns(2)
         s_ = c1.date_input(T["calc_start"], value=first.date(), format=fmt, key="calc_start")
@@ -989,6 +995,48 @@ with r3:
 
 st.divider()
 
+# ------------------------------------------------------- what the range is worth
+st.subheader(T["s5"], anchor="value")
+st.caption(T["s5_cap"])
+TV = load_turn_value()
+
+
+def value_table(kind: str) -> pd.DataFrame:
+    """Calibrated model against the naive range for one turn type, by horizon."""
+    g = TV[TV["type"] == kind].sort_values(["horizon", "method"])
+    return pd.DataFrame({
+        T["tv_h"]: g["horizon"].astype(str).to_numpy(),
+        T["tv_method"]: [T["tv_model"] if m == "calibrated model" else T["tv_naive"]
+                         for m in g["method"]],
+        T["tv_hits"]: [f"{h}/{k}" for h, k in zip(g["hits"], g["n"])],
+        T["tv_cush"]: [n(v, 1) for v in g["mean_cushion_bp"]],
+        T["tv_over"]: [n(v, 2) for v in g["mean_overshoot_bp"]],
+        T["tv_worst"]: [n(v, 1) for v in g["worst_overshoot_bp"]],
+        T["tv_cush_usd"]: [n(v, 0) for v in g["mean_cushion_usd_per_bn"]],
+        T["tv_over_usd"]: [n(v, 0) for v in g["mean_overshoot_usd_per_bn"]],
+    })
+
+
+qe_tv = TV[TV["type"] == "quarter-end"]
+by_m = {m: g for m, g in qe_tv.groupby("method")}
+mod, nv = by_m["calibrated model"], by_m["naive range"]
+v1, v2 = st.columns(2)
+with v1:
+    st.markdown(f"**{T['tv_qe']}**")
+    show_table("dl_value_qe", value_table("quarter-end"), qe_tv)
+with v2:
+    st.markdown(f"**{T['tv_me']}**")
+    show_table("dl_value_me", value_table("month-end"), TV[TV["type"] == "month-end"])
+st.caption(T["s5_read"].format(
+    n=int(mod["n"].sum()), m_miss=int((mod["n"] - mod["hits"]).sum()),
+    v_miss=int((nv["n"] - nv["hits"]).sum()),
+    m_worst=n(mod["worst_overshoot_bp"].max(), 1), v_worst=n(nv["worst_overshoot_bp"].max(), 1),
+    m_cush=n((mod["mean_cushion_bp"] * mod["n"]).sum() / mod["n"].sum(), 1),
+    v_cush=n((nv["mean_cushion_bp"] * nv["n"]).sum() / nv["n"].sum(), 1)))
+st.caption(T["s5_caveat"])
+
+st.divider()
+
 # ----------------------------------------------------------------- method
 st.subheader(T["method_title"], anchor="method")
 with st.expander(T["about_title"]):
@@ -1018,6 +1066,8 @@ with st.expander(T["m_importance"]):
 with st.expander(T["m_carry"]):
     st.markdown(T["s4_intro"])
     st.markdown(T["conclusion"].format(**CARRY_ARGS))
+with st.expander(T["m_value"]):
+    st.markdown(T["s5_intro"])
 with st.expander(T["m_timing"]):
     st.markdown(T["timing_table"])
     st.markdown(T["timing_note"])

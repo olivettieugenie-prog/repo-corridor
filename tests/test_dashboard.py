@@ -120,7 +120,7 @@ class TestAppHeader(unittest.TestCase):
                             self.assertEqual(re.findall(r'href="#([\w-]+)"', htmls), db.SECTIONS)
                             self.assertEqual([h.proto.anchor for h in at.subheader if h.proto.anchor],
                                              db.SECTIONS[:3] + ["calendar", "corridor", "model",
-                                                                "carry", "method"])
+                                                                "carry", "value", "method"])
                             caps = " ".join(c.value for c in at.caption)
                             self.assertIn(STRINGS[lang]["hdr_delay"], caps)
             finally:

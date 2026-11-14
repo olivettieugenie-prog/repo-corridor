@@ -88,6 +88,25 @@ class CarryTableTest(AppRun):
                 self.assertNotIn(num(0.303, 3, lang), text)
 
 
+class RangeValueTest(AppRun):
+    def test_value_tables_follow_the_summary(self):
+        tv = pd.read_csv(ROOT / "data" / "processed" / "turn_value_summary.csv")
+        for lang in LANGS:
+            T = STRINGS[lang]
+            with self.subTest(lang=lang):
+                at = self.run_app(lang)
+                self.assertIn(T["s5"], [h.value for h in at.subheader])
+                tables = [d.value for d in at.dataframe if T["tv_cush_usd"] in d.value.columns]
+                self.assertEqual(len(tables), 2)
+                for tab, kind in zip(tables, ("quarter-end", "month-end")):
+                    g = tv[tv["type"] == kind].sort_values(["horizon", "method"])
+                    self.assertEqual(list(tab[T["tv_hits"]]),
+                                     [f"{h}/{k}" for h, k in zip(g["hits"], g["n"])])
+                caps = " ".join(c.value for c in at.caption)
+                self.assertIn(T["s5_caveat"], caps)
+                self.assertIn(T["calc_benchmark"], caps)
+
+
 class TurnsWindowTest(AppRun):
     def test_turns_after_the_old_end_date(self):
         os.environ["REPO_TODAY"] = "2027-01-04"

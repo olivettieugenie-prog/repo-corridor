@@ -30,6 +30,7 @@ Which public factors explain the daily gap between SOFR and the Fed's administer
     python src/forward_backtest.py # the forward path, 1 to 20 days ahead
     python src/fetch_srf.py        # Standing Repo Facility take-up, rate check
     python src/backtest_carry.py   # the cash placement rule
+    python src/turn_value.py       # what the 90% line is worth over a turn
     streamlit run app.py           # the app
 
 The app reads only the files in `data/processed`, so it starts without refitting anything.
@@ -291,6 +292,48 @@ This is the result after extending the administered-rate history back to 2018, w
 So the model has statistical skill, at R² +0.13 against AR(1) from 2024 (Diebold-Mariano p = 0.0002, though not significant over the full sample from 2020), and that skill is worth essentially nothing here. The reason is structural: the Fed's two facilities bound the corridor so tightly that the overnight placement decision has almost no money in it. The action is confined to 2022 and 2023. In 2022 always-lend gave up 1.55 bp against the facility and every smarter rule merely gets back to zero, which is why about $2.0tn sat at ON RRP: not to chase carry, but because the facility simply paid more. From 2024 the carry is positive every day and all rules collapse onto always-lend. In 2023 the carry is so thin that switching costs take the entire benefit, and even perfect foresight nets less than always-lend.
 
 The honest conclusion is that the overnight placement decision is not a trading strategy. Where the model does earn its keep is in pricing the turns, which is what the app now leads with.
+
+## Economic value
+
+The two results connect. The point forecast earns nothing on the overnight choice: the LASSO adds 0.003 bp over AR(1), out of a whole prize of 0.252 bp a year (previous section). So this is a risk monitor, not a source of alpha. Its value is a range to budget against, and `src/turn_value.py` prices that range.
+
+Read the 90% line as a break-even: the highest fixed rate a borrower who must fund over a turn should accept. For every out-of-sample turn (16 quarter-ends and 40 month-ends from 2020), every horizon (1, 5, 10 and 15 settlement days ahead) and two lines, the calibrated model's `q90_cal` and the naive range, the script takes the line as a SOFR level and the SOFR printed on the turn, and reports:
+
+- **cushion**, max(line − realised, 0): what a borrower who locks at the line overpays;
+- **overshoot**, max(realised − line, 0): what a borrower who rolls loses when the line fails;
+- both in bp and in USD per $1bn, bp / 10,000 × 1bn × nights / 360, where a Friday turn carries three nights.
+
+Nothing is refitted: the forecasts are the walk-forward ones in `turn_quantiles_horizon.csv`, and the hit counts are asserted against `turn_naive_ranges.csv`.
+
+Quarter-ends:
+
+| h | line | held | mean cushion bp | mean overshoot bp | worst overshoot bp | mean cushion $/bn | mean overshoot $/bn |
+|---|---|---|---|---|---|---|---|
+| 1 | model | 15/16 | 11.4 | 0.04 | 0.7 (30 Jun 2025) | 5,501 | 12 |
+| 1 | naive | 8/16 | 1.1 | 1.64 | 10.0 (30 Sep 2024) | 531 | 606 |
+| 5 | model | 16/16 | 13.0 | 0.00 | 0.0 | 6,236 | 0 |
+| 5 | naive | 8/16 | 1.8 | 2.31 | 9.3 (30 Jun 2025) | 825 | 804 |
+| 10 | model | 16/16 | 14.3 | 0.00 | 0.0 | 7,308 | 0 |
+| 10 | naive | 9/16 | 1.7 | 2.33 | 12.0 (30 Jun 2025) | 750 | 880 |
+| 15 | model | 15/16 | 13.0 | 0.03 | 0.5 (30 Sep 2025) | 6,273 | 9 |
+| 15 | naive | 10/16 | 2.0 | 2.02 | 10.4 (30 Jun 2025) | 1,035 | 840 |
+
+Month-ends:
+
+| h | line | held | mean cushion bp | mean overshoot bp | worst overshoot bp | mean cushion $/bn | mean overshoot $/bn |
+|---|---|---|---|---|---|---|---|
+| 1 | model | 39/40 | 7.3 | 0.46 | 18.3 (31 Oct 2025) | 4,484 | 381 |
+| 1 | naive | 31/40 | 1.7 | 0.70 | 12.7 (31 Oct 2025) | 1,147 | 383 |
+| 5 | model | 38/40 | 7.9 | 0.56 | 22.2 (31 Oct 2025) | 4,650 | 465 |
+| 5 | naive | 29/40 | 2.3 | 1.21 | 14.0 (31 Oct 2025) | 1,442 | 782 |
+| 10 | model | 38/40 | 8.0 | 0.62 | 22.4 (31 Oct 2025) | 4,910 | 520 |
+| 10 | naive | 32/40 | 1.5 | 1.00 | 22.7 (31 Oct 2025) | 921 | 756 |
+| 15 | model | 36/40 | 7.1 | 0.72 | 23.8 (31 Oct 2025) | 4,388 | 593 |
+| 15 | naive | 26/40 | 1.6 | 1.49 | 26.6 (31 Oct 2025) | 1,075 | 1,088 |
+
+On quarter-ends the model's line failed 2 times in 64 forecasts, never by more than 0.7 bp; the naive line failed 29 times, by up to 12.0 bp. The price of that safety is the cushion, 12.9 bp on average against 1.6 bp: the model's line is a conservative budget, not a tight quote. On month-ends both lines miss 31 October 2025, a Friday turn, when SOFR printed 18.3 bp above the model's line and 12.7 bp above the naive one at h = 1.
+
+This is not a P&L. Public data has no term repo quotes, so there is no rate at which the turn could actually have been locked. SOFR is a benchmark, a volume-weighted median, not a dealable rate: a desk's own level differs by collateral and counterparty.
 
 ## Extensions left out for lack of time
 
